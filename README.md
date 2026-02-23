@@ -2,8 +2,9 @@
   <img src="https://img.shields.io/badge/Rust-000000?style=for-the-badge&logo=rust&logoColor=white" alt="Rust">
   <img src="https://img.shields.io/badge/Svelte-4A5548?style=for-the-badge&logo=svelte&logoColor=white" alt="Svelte">
   <img src="https://img.shields.io/badge/Tauri-222222?style=for-the-badge&logo=tauri&logoColor=white" alt="Tauri">
-  <a href="LICENSE"><img src="https://img.shields.io/badge/MIT-white?style=for-the-badge&logo=andela&logoColor=white&label=License&labelColor=222" alt="License"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/GPL--v3-white?style=for-the-badge&logo=gnu&logoColor=white&label=License&labelColor=222" alt="License"></a>
 </p>
+
 
 <h1 align="center">Kira</h1>
 
@@ -63,4 +64,4 @@ Build: Bun + Vite
 
 ## License
 
-Kira is open-source software licensed under the [MIT License](LICENSE).
+Kira is open-source software licensed under the [GNU GPL v3](LICENSE).
