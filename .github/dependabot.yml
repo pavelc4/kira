@@ -1,0 +1,40 @@
+version: 2
+updates:
+  - package-ecosystem: 'cargo'
+    directory: '/kira-core'
+    schedule:
+      interval: 'daily'
+    labels:
+      - 'dependencies'
+      - 'rust'
+      - 'security'
+    open-pull-requests-limit: 10
+    commit-message:
+      prefix: 'deps'
+      include: 'scope'
+
+  - package-ecosystem: 'cargo'
+    directory: '/src-tauri'
+    schedule:
+      interval: 'daily'
+    labels:
+      - 'dependencies'
+      - 'rust'
+      - 'security'
+    open-pull-requests-limit: 10
+    commit-message:
+      prefix: 'deps'
+      include: 'scope'
+
+  - package-ecosystem: 'npm'
+    directory: '/'
+    schedule:
+      interval: 'daily'
+    labels:
+      - 'dependencies'
+      - 'javascript'
+      - 'security'
+    open-pull-requests-limit: 10
+    commit-message:
+      prefix: 'deps'
+      include: 'scope'
