@@ -1,4 +1,4 @@
-use crate::device::{get_build_info, get_max_refresh_rate, get_storage, parse_battery, shell_cmd, DeviceInfo};
+use crate::device::{get_build_info, get_max_refresh_rate, get_storage, parse_battery, reboot, shell_cmd, DeviceInfo, RebootMode};
 use adb_client::server::ADBServer;
 use adb_client::server_device::ADBServerDevice;
 use anyhow::Result;
@@ -43,6 +43,17 @@ impl KiraCore {
         println!("KIRA: {:?}", info);
         Ok(info)
     }
+
+    pub fn reboot(&mut self, serial: &str, mode: RebootMode) -> Result<()> {
+        let devices = self.server.devices()?;
+        let _ = devices
+            .iter()
+            .find(|d| d.identifier == serial)
+            .ok_or(anyhow::anyhow!("Device {} not found", serial))?;
+
+        let mut device = ADBServerDevice::new(serial.to_string(), None);
+        reboot(&mut device, mode)
+    }
 }
 
 #[cfg(test)]
@@ -80,5 +91,105 @@ mod tests {
         assert_eq!(parse_battery("other:50"), None);
         assert_eq!(parse_battery("level:"), None);
         assert_eq!(parse_battery(""), None);
+    }
+
+    #[tokio::test]
+    #[ignore] // WARNING: This will reboot the device!
+    async fn test_reboot_recovery() {
+        let mut core = KiraCore::new().expect("Failed to create KiraCore");
+        
+        let devices = core.server.devices().expect("Failed to get devices");
+        
+        if devices.is_empty() {
+            println!("No devices connected. Skipping test.");
+            return;
+        }
+        
+        let serial = &devices[0].identifier;
+        println!("Testing reboot to recovery for device: {}", serial);
+        
+        core.reboot(serial, RebootMode::Recovery).expect("Failed to reboot to recovery");
+        
+        println!("Reboot to recovery command sent!");
+    }
+
+    #[tokio::test]
+    #[ignore] // WARNING: This will reboot the device!
+    async fn test_reboot_bootloader() {
+        let mut core = KiraCore::new().expect("Failed to create KiraCore");
+        
+        let devices = core.server.devices().expect("Failed to get devices");
+        
+        if devices.is_empty() {
+            println!("No devices connected. Skipping test.");
+            return;
+        }
+        
+        let serial = &devices[0].identifier;
+        println!("Testing reboot to bootloader for device: {}", serial);
+        
+        core.reboot(serial, RebootMode::Bootloader).expect("Failed to reboot to bootloader");
+        
+        println!("Reboot to bootloader command sent!");
+    }
+
+    #[tokio::test]
+    #[ignore] // WARNING: This will reboot the device!
+    async fn test_reboot_system() {
+        let mut core = KiraCore::new().expect("Failed to create KiraCore");
+        
+        let devices = core.server.devices().expect("Failed to get devices");
+        
+        if devices.is_empty() {
+            println!("No devices connected. Skipping test.");
+            return;
+        }
+        
+        let serial = &devices[0].identifier;
+        println!("Testing reboot to system for device: {}", serial);
+        
+        core.reboot(serial, RebootMode::Normal).expect("Failed to reboot to system");
+        
+        println!("Reboot to system command sent!");
+    }
+
+    #[tokio::test]
+    #[ignore] // WARNING: This will reboot the device!
+    async fn test_reboot_fastboot() {
+        let mut core = KiraCore::new().expect("Failed to create KiraCore");
+        
+        let devices = core.server.devices().expect("Failed to get devices");
+        
+        if devices.is_empty() {
+            println!("No devices connected. Skipping test.");
+            return;
+        }
+        
+        let serial = &devices[0].identifier;
+        println!("Testing reboot to fastboot for device: {}", serial);
+        
+        core.reboot(serial, RebootMode::Fastboot).expect("Failed to reboot to fastboot");
+        
+        println!("Reboot to fastboot command sent!");
+    }
+
+    #[tokio::test]
+    #[ignore] // WARNING: This will reboot the device!
+    async fn test_reboot_sideload() {
+        let mut core = KiraCore::new().expect("Failed to create KiraCore");
+        
+        let devices = core.server.devices().expect("Failed to get devices");
+        
+        if devices.is_empty() {
+            println!("No devices connected. Skipping test.");
+            return;
+        }
+        
+        let serial = &devices[0].identifier;
+        println!("Testing reboot to sideload for device: {}", serial);
+        
+        core.reboot(serial, RebootMode::Sideload).expect("Failed to reboot to sideload");
+        
+        println!("Reboot to sideload command sent!");
     }
 }
