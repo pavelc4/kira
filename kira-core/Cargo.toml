@@ -5,6 +5,7 @@ edition = "2024"
 
 [dependencies]
 adb_client = "3.1.1"
+fastboot-protocol = "0.3.1"
 anyhow.workspace = true
 serde.workspace = true
 thiserror = "2.0.18"
