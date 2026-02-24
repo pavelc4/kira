@@ -4,7 +4,6 @@ use serde::{Deserialize, Serialize};
 use std::io::{BufRead, BufReader};
 use std::sync::mpsc;
 use std::thread;
-use std::time::Duration;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct LogcatEntry {

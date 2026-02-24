@@ -1,7 +1,6 @@
 use adb_client::server_device::ADBServerDevice;
 use adb_client::ADBDeviceExt;
 use serde::{Deserialize, Serialize};
-use std::time::{SystemTime, UNIX_EPOCH};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FileInfo {

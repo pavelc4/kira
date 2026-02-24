@@ -2,11 +2,7 @@ use adb_client::server_device::ADBServerDevice;
 use adb_client::ADBDeviceExt;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::io::{BufRead, BufReader, Write};
-use std::process::{Child, Command, Stdio};
-use std::sync::mpsc;
-use std::thread;
-use std::time::Duration;
+use std::io::{BufRead, Write};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CommandOutput {
