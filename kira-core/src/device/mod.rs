@@ -6,6 +6,7 @@ pub mod root;
 pub mod process;
 pub mod logcat;
 pub mod shell;
+pub mod file_manager;
 
 pub use display::*;
 pub use info::*;
@@ -15,3 +16,4 @@ pub use root::*;
 pub use process::*;
 pub use logcat::*;
 pub use shell::*;
+pub use file_manager::*;
