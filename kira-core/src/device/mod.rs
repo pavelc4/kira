@@ -5,6 +5,7 @@ pub mod fastboot;
 pub mod root;
 pub mod process;
 pub mod logcat;
+pub mod shell;
 
 pub use display::*;
 pub use info::*;
@@ -13,3 +14,4 @@ pub use fastboot::*;
 pub use root::*;
 pub use process::*;
 pub use logcat::*;
+pub use shell::*;
