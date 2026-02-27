@@ -37,4 +37,4 @@
         </div>
         <span>Logcat</span>
     </a>
-</nav>ss
+</nav>
