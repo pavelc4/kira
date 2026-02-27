@@ -3,9 +3,21 @@
 	<head>
 		<meta charset="utf-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>Kira</title>
+		<link
+			href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;600;700&display=swap"
+			rel="stylesheet"
+		/>
+		<link
+			rel="stylesheet"
+			href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200"
+		/>
 		%sveltekit.head%
 	</head>
-	<body data-sveltekit-preload-data="hover">
+	<body
+		data-sveltekit-preload-data="hover"
+		class="bg-surface text-on-surface flex h-screen w-full overflow-hidden antialiased"
+	>
 		<div style="display: contents">%sveltekit.body%</div>
 	</body>
 </html>
