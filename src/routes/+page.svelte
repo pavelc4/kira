@@ -20,22 +20,25 @@
 	let chartTotal: any;
 	let chartMemory: any;
 	let chartFps: any;
+	let chartCores: any[] = [];
 	let dataCpu = Array(40).fill(0);
 	let dataMem = Array(40).fill(0);
 	let dataFps = Array(40).fill(0);
+	
+	let dataCores = Array(8).fill(0).map(() => Array(25).fill(0));
+	let coreUsages = Array(8).fill(0);
+	let coreSpeeds = Array(8).fill(0);
 
 	let topPackageName = 'Browser';
 	let currentFps = 0;
 	let currentCpu = 0;
 	let currentMem = 0;
 	let memStr = '0MB';
+	let uptimeStr = '0:00:00:00';
 	let lastFpsData: any = null;
+    let lastCpuData: any = null;
 
-	let processes = [
-		{ name: 'com.android.systemui', pid: '1432', cpu: '12.4', mem: '452 MB', isSys: true },
-		{ name: 'com.whatsapp', pid: '8921', cpu: '2.1', mem: '180 MB', isSys: false },
-		{ name: 'surfaceflinger', pid: '412', cpu: '15.2', mem: '95 MB', isSys: true }
-	];
+	let processes: any[] = [];
 
 	onMount(async () => {
 		try {
@@ -94,16 +97,20 @@
 
 		for (let i = 0; i < 8; i++) {
 			if (coreCharts[i]) {
-				new ApexCharts(coreCharts[i], {
+				chartCores[i] = new ApexCharts(coreCharts[i], {
 					...getBaseChartConfig('#4ADE80', 35),
 					stroke: { curve: 'stepline', width: 1 },
-					series: [{ data: genData(25, 0, 100) }]
-				}).render();
+					series: [{ data: dataCores[i] }]
+				});
+				chartCores[i].render();
 			}
 		}
 
+		let isPolling = false;
+
 		setInterval(async () => {
-			if (isTauri && invoke && selectedDevice) {
+			if (isTauri && invoke && selectedDevice && !isPolling) {
+				isPolling = true;
 				try {
 					const topPkg = await invoke('get_top_package', { serial: selectedDevice });
 					if (topPkg && topPkg.name) {
@@ -114,15 +121,75 @@
 					
 					if (perf.memory && perf.memory.Ok) {
 						const memInfo = perf.memory.Ok;
-						currentMem = Math.round(((memInfo.total - memInfo.available) / memInfo.total) * 100);
-						memStr = `${Math.round((memInfo.total - memInfo.available) / 1024)}MB`;
+						currentMem = Math.round(((memInfo.total_kb - memInfo.available_kb) / memInfo.total_kb) * 100);
+						memStr = `${Math.round((memInfo.total_kb - memInfo.available_kb) / 1024)}MB`;
 						dataMem.push(currentMem);
 						dataMem.shift();
 						chartMemory.updateSeries([{ data: dataMem }]);
 					}
 
+					if (perf.uptime && perf.uptime.Ok) {
+						let ut = perf.uptime.Ok;
+						let days = Math.floor(ut / 86400);
+						let hours = Math.floor((ut % 86400) / 3600);
+						let minutes = Math.floor((ut % 3600) / 60);
+						let seconds = Math.floor(ut % 60);
+						uptimeStr = `${hours}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+						if (days > 0) uptimeStr = `${days}d ` + uptimeStr;
+					}
+
 					if (perf.cpu && perf.cpu.Ok && perf.cpu.Ok.length > 0) {
-						currentCpu = Math.round(perf.cpu.Ok[0].usage);
+						const currentCpus = perf.cpu.Ok;
+
+                        if (lastCpuData !== null && currentCpus.length > 0 && lastCpuData.length > 0) {
+                            const curr = currentCpus[0].times;
+                            const prev = lastCpuData[0].times;
+                            
+                            const c_total = curr.user + curr.nice + curr.sys + curr.idle + curr.iowait + curr.irq + curr.softirq;
+                            const p_total = prev.user + prev.nice + prev.sys + prev.idle + prev.iowait + prev.irq + prev.softirq;
+                            
+                            const totalDelta = c_total - p_total;
+                            const idleDelta = (curr.idle + curr.iowait) - (prev.idle + prev.iowait);
+                            
+                            if (totalDelta > 0) {
+                                currentCpu = Math.round(100 * (1 - (idleDelta / totalDelta)));
+                            }
+
+							// Update individual cores
+							for(let i = 1; i < currentCpus.length; i++) {
+								let cpuName = currentCpus[i].name;
+								if (!cpuName || !cpuName.startsWith('cpu')) continue;
+								
+								let idxStr = cpuName.replace('cpu', '');
+								let idx = parseInt(idxStr);
+								if (isNaN(idx) || idx < 0 || idx >= 8) continue;
+								
+								let c_prv_cpu = lastCpuData.find((c: any) => c.name === cpuName);
+
+								if (c_prv_cpu) {
+									let c_cur = currentCpus[i].times;
+									let c_prv = c_prv_cpu.times;
+
+									let core_tot = (c_cur.user + c_cur.nice + c_cur.sys + c_cur.idle + c_cur.iowait + c_cur.irq + c_cur.softirq) - 
+												   (c_prv.user + c_prv.nice + c_prv.sys + c_prv.idle + c_prv.iowait + c_prv.irq + c_prv.softirq);
+									let core_idle = (c_cur.idle + c_cur.iowait) - (c_prv.idle + c_prv.iowait);
+
+									let u = 0;
+									if (core_tot > 0) {
+										u = Math.round(100 * (1 - (core_idle / core_tot)));
+									}
+
+									coreUsages[idx] = u;
+									coreSpeeds[idx] = currentCpus[i].speed_mhz || 0;
+
+									dataCores[idx].push(u);
+									dataCores[idx].shift();
+									if (chartCores[idx]) chartCores[idx].updateSeries([{ data: dataCores[idx] }]);
+								}
+							}
+						}
+                        
+                        lastCpuData = currentCpus;
 						dataCpu.push(currentCpu);
 						dataCpu.shift();
 						chartTotal.updateSeries([{ data: dataCpu }]);
@@ -147,6 +214,9 @@
 					}
 				} catch (e) {
 					console.error("Polling error", e);
+					error = String(e);
+				} finally {
+					isPolling = false;
 				}
 			}
 		}, 1000);
@@ -183,11 +253,18 @@
 		if (!selectedDevice) return;
 		try {
 			if (isTauri && invoke) {
-				packages = await invoke('list_packages', {
-					serial: selectedDevice,
-					filter: 'thirdparty'
+				const rustProcs: any = await invoke('list_processes', {
+					serial: selectedDevice
 				});
-				// Convert logic if needed. Mock processes stay for now.
+                if (rustProcs && rustProcs.length > 0) {
+                    processes = rustProcs.slice(0, 50).map((p: any) => ({
+                        name: p.name,
+                        pid: p.pid.toString(),
+                        cpu: p.cpu,
+                        mem: p.mem,
+                        isSys: p.user === 'root' || p.user === 'system'
+                    }));
+                }
 			} else {
 				packages = ['com.example.app1', 'com.example.app2'];
 			}
@@ -223,6 +300,12 @@
 				<span class="material-symbols-outlined text-[16px] align-middle mr-1">palette</span> Toggle Theme
 			</button>
 		</header>
+
+		{#if error}
+			<div class="bg-error/20 text-error border border-error/50 p-4 rounded-xl mb-4 font-medium break-words whitespace-pre-wrap">
+				{error}
+			</div>
+		{/if}
 
 		{#if devices.length > 0}
 			<!-- Current Active Device Banner -->
@@ -362,7 +445,7 @@
 					</h3>
 					<div class="flex items-center gap-2 rounded-full bg-surface-container-high px-4 py-2">
 						<span class="h-2 w-2 rounded-full bg-primary animate-pulse"></span>
-						<span class="text-xs font-medium text-on-surface">Uptime 0:00:15:56</span>
+						<span class="text-xs font-medium text-on-surface">Uptime {uptimeStr}</span>
 					</div>
 				</header>
 
@@ -405,9 +488,9 @@
 						>
 							<div class="flex justify-between items-center mb-2">
 								<span class="text-[11px] font-medium text-on-surface-variant"
-									>CPU{i} <span class="ml-1">1708MHz</span></span
+									>CPU{i} <span class="ml-1">{coreSpeeds[i] ? coreSpeeds[i] + 'MHz' : '~'}</span></span
 								>
-								<span class="text-[12px] font-bold text-primary">~</span>
+								<span class="text-[12px] font-bold text-primary">{coreUsages[i]}%</span>
 							</div>
 							<div bind:this={coreCharts[i]} class="h-[35px] w-full"></div>
 						</div>

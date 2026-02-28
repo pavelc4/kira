@@ -137,6 +137,7 @@ pub struct CpuTimes {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct CpuInfo {
+    pub name: String,
     pub times: CpuTimes,
     pub speed_mhz: Option<u32>,
 }
@@ -149,10 +150,6 @@ pub fn parse_cpu_stat(output: &str) -> Vec<CpuInfo> {
             continue;
         }
         let parts: Vec<&str> = line.split_whitespace().collect();
-        if parts[0] == "cpu" {
-            // Aggregate stat, skip
-            continue;
-        }
 
         if parts.len() >= 8 {
             let times = CpuTimes {
@@ -165,6 +162,7 @@ pub fn parse_cpu_stat(output: &str) -> Vec<CpuInfo> {
                 softirq: parts[7].parse().unwrap_or(0),
             };
             cpus.push(CpuInfo {
+                name: parts[0].to_string(),
                 times,
                 speed_mhz: None,
             });
@@ -177,18 +175,21 @@ pub fn get_cpu_info(device: &mut ADBServerDevice) -> Result<Vec<CpuInfo>, Perfor
     let output = run_shell_command(device, "cat /proc/stat")?;
     let mut cpus = parse_cpu_stat(&output);
 
-    // Optional: Fetch cpu speeds
-    let cmd_speeds = "cat /sys/devices/system/cpu/cpu*/cpufreq/scaling_cur_freq";
+    let cmd_speeds = "for i in /sys/devices/system/cpu/cpu[0-9]*; do echo -n \"${i##*/} \"; cat $i/cpufreq/scaling_cur_freq 2>/dev/null || echo \"OFF\"; done";
     if let Ok(speeds_out) = run_shell_command(device, cmd_speeds) {
-        let speeds: Vec<u32> = speeds_out
-            .lines()
-            .filter_map(|line| line.trim().parse::<u32>().ok())
-            .map(|speed_khz| speed_khz / 1000)
-            .collect();
+        let mut speed_map = std::collections::HashMap::new();
+        for line in speeds_out.lines() {
+            let parts: Vec<&str> = line.split_whitespace().collect();
+            if parts.len() == 2 {
+                if let Ok(speed) = parts[1].parse::<u32>() {
+                    speed_map.insert(parts[0].to_string(), speed / 1000);
+                }
+            }
+        }
 
-        for (i, cpu) in cpus.iter_mut().enumerate() {
-            if i < speeds.len() {
-                cpu.speed_mhz = Some(speeds[i]);
+        for cpu in cpus.iter_mut() {
+            if let Some(&speed) = speed_map.get(&cpu.name) {
+                cpu.speed_mhz = Some(speed);
             }
         }
     }
@@ -233,6 +234,19 @@ pub fn get_flips_count(device: &mut ADBServerDevice) -> Result<FpsData, Performa
             "Could not find flips count".to_string(),
         ))
     }
+}
+
+pub fn get_uptime(device: &mut ADBServerDevice) -> Result<u64, PerformanceError> {
+    let output = run_shell_command(device, "cat /proc/uptime")?;
+    let parts: Vec<&str> = output.split_whitespace().collect();
+    if let Some(first) = parts.first() {
+        if let Ok(uptime_sec) = first.parse::<f64>() {
+            return Ok(uptime_sec as u64);
+        }
+    }
+    Err(PerformanceError::ParseError(
+        "Could not parse uptime".to_string(),
+    ))
 }
 
 #[cfg(test)]

@@ -7,6 +7,8 @@ pub struct ProcessInfo {
     pub pid: u32,
     pub name: String,
     pub user: String,
+    pub cpu: String,
+    pub mem: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -19,6 +21,83 @@ pub struct MemoryInfo {
 }
 
 pub fn list_processes(device: &mut ADBServerDevice) -> Result<Vec<ProcessInfo>, ProcessError> {
+    // Try top command first to get CPU and Memory
+    if let Ok(output) = run_shell_command(device, "top -n 1") {
+        let mut start_idx = None;
+        let lines: Vec<&str> = output.lines().collect();
+
+        for (i, line) in lines.iter().enumerate() {
+            if line.trim().starts_with("PID") {
+                start_idx = Some(i + 1);
+                break;
+            }
+        }
+
+        if let Some(idx) = start_idx {
+            let mut processes = Vec::new();
+            let header_line = lines[idx - 1].trim();
+            let headers: Vec<&str> = header_line.split_whitespace().collect();
+
+            let mut pid_idx = 0;
+            let mut user_idx = 1;
+            let mut cpu_idx = 8;
+            let mut mem_idx = 5;
+            let mut args_idx = headers.len().saturating_sub(1);
+
+            for (i, h) in headers.iter().enumerate() {
+                let lh = h.to_lowercase();
+                if lh == "pid" {
+                    pid_idx = i;
+                } else if lh == "user" || lh == "uid" {
+                    user_idx = i;
+                } else if lh == "%cpu" || lh == "cpu%" {
+                    cpu_idx = i;
+                } else if lh == "res" || lh == "rss" {
+                    mem_idx = i;
+                } else if lh == "args" || lh == "name" || lh == "cmd" || lh == "cmdline" {
+                    args_idx = i;
+                }
+            }
+
+            for line in lines.iter().skip(idx) {
+                let line = line.trim();
+                if line.is_empty() {
+                    continue;
+                }
+                let parts: Vec<&str> = line.split_whitespace().collect();
+                if parts.len() > std::cmp::max(pid_idx, std::cmp::max(cpu_idx, mem_idx)) {
+                    if let Ok(pid) = parts[pid_idx].parse::<u32>() {
+                        let user = parts.get(user_idx).unwrap_or(&"").to_string();
+                        let cpu = parts.get(cpu_idx).unwrap_or(&"0.0").to_string();
+                        let mem = parts.get(mem_idx).unwrap_or(&"0M").to_string();
+
+                        let name = if parts.len() > args_idx {
+                            parts[args_idx..].join(" ")
+                        } else {
+                            parts.last().unwrap_or(&"").to_string()
+                        };
+
+                        if name.contains("top -n 1") {
+                            continue;
+                        }
+
+                        processes.push(ProcessInfo {
+                            pid,
+                            name,
+                            user,
+                            cpu,
+                            mem,
+                        });
+                    }
+                }
+            }
+            if !processes.is_empty() {
+                return Ok(processes);
+            }
+        }
+    }
+
+    // Fallback to ps
     let output = run_shell_command(device, "ps")?;
 
     let processes: Vec<ProcessInfo> = output
@@ -30,7 +109,13 @@ pub fn list_processes(device: &mut ADBServerDevice) -> Result<Vec<ProcessInfo>, 
                 let user = parts[0].to_string();
                 let pid = parts[1].parse::<u32>().ok()?;
                 let name = parts.last()?.to_string();
-                Some(ProcessInfo { pid, name, user })
+                Some(ProcessInfo {
+                    pid,
+                    name,
+                    user,
+                    cpu: "0".to_string(),
+                    mem: "0".to_string(),
+                })
             } else {
                 None
             }
@@ -175,6 +260,8 @@ mod tests {
             pid: 1234,
             name: "com.example.app".to_string(),
             user: "u0_a123".to_string(),
+            cpu: "12.4".to_string(),
+            mem: "54M".to_string(),
         };
 
         assert_eq!(process.pid, 1234);
@@ -188,6 +275,8 @@ mod tests {
             pid: 1234,
             name: "com.example.app".to_string(),
             user: "u0_a123".to_string(),
+            cpu: "0.0".to_string(),
+            mem: "10K".to_string(),
         };
 
         let cloned = original.clone();
@@ -277,7 +366,13 @@ mod tests {
                     let user = parts[0].to_string();
                     let pid = parts[1].parse::<u32>().ok()?;
                     let name = parts.last()?.to_string();
-                    Some(ProcessInfo { pid, name, user })
+                    Some(ProcessInfo {
+                        pid,
+                        name,
+                        user,
+                        cpu: "0".to_string(),
+                        mem: "0".to_string(),
+                    })
                 } else {
                     None
                 }
@@ -298,16 +393,22 @@ mod tests {
                 pid: 1,
                 name: "com.paget96.batteryguru".to_string(),
                 user: "u0_a123".to_string(),
+                cpu: "0".to_string(),
+                mem: "0".to_string(),
             },
             ProcessInfo {
                 pid: 2,
                 name: "com.android.phone".to_string(),
                 user: "u0_a456".to_string(),
+                cpu: "0".to_string(),
+                mem: "0".to_string(),
             },
             ProcessInfo {
                 pid: 3,
                 name: "batteryguru_helper".to_string(),
                 user: "u0_a789".to_string(),
+                cpu: "0".to_string(),
+                mem: "0".to_string(),
             },
         ];
 

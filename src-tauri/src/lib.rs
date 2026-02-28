@@ -164,6 +164,7 @@ pub struct PerformanceProfile {
     pub battery: Result<BatteryInfo, String>,
     pub cpu: Result<Vec<CpuInfo>, String>,
     pub fps: Result<FpsData, String>,
+    pub uptime: Result<u64, String>,
 }
 
 #[command]
@@ -175,12 +176,14 @@ fn get_performance_profile(serial: String) -> Result<PerformanceProfile, String>
     let battery = get_battery_info(&mut device).map_err(|e| e.to_string());
     let cpu = get_cpu_info(&mut device).map_err(|e| e.to_string());
     let fps = get_flips_count(&mut device).map_err(|e| e.to_string());
+    let uptime = device::performance::get_uptime(&mut device).map_err(|e| e.to_string());
 
     Ok(PerformanceProfile {
         memory,
         battery,
         cpu,
         fps,
+        uptime,
     })
 }
 
