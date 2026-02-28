@@ -57,13 +57,16 @@ impl FastbootCore {
 
     pub async fn list_devices() -> Result<Vec<FastbootDeviceInfo>, FastbootError> {
         let mut devices = Vec::new();
-        
+
         let fb_devices = fastboot_protocol::nusb::devices()
             .map_err(|e| FastbootError::ProtocolError(e.to_string()))?;
-        
+
         for info in fb_devices {
-            let serial = info.serial_number().map(|s| s.to_string()).unwrap_or_else(|| "unknown".to_string());
-            
+            let serial = info
+                .serial_number()
+                .map(|s| s.to_string())
+                .unwrap_or_else(|| "unknown".to_string());
+
             devices.push(FastbootDeviceInfo {
                 serial,
                 product: None,
@@ -73,46 +76,44 @@ impl FastbootCore {
                 version: None,
             });
         }
-        
+
         Ok(devices)
     }
 
     pub async fn connect(&mut self, serial: Option<&str>) -> Result<(), FastbootError> {
         let mut fb_devices = fastboot_protocol::nusb::devices()
             .map_err(|e| FastbootError::ProtocolError(e.to_string()))?;
-        
+
         let info = match serial {
             Some(s) => fb_devices
                 .find(|info| info.serial_number().map(|sn| sn == s).unwrap_or(false))
                 .ok_or(FastbootError::NoDevice)?,
-            None => fb_devices
-                .next()
-                .ok_or(FastbootError::NoDevice)?,
+            None => fb_devices.next().ok_or(FastbootError::NoDevice)?,
         };
-        
+
         let fb = fastboot_protocol::nusb::NusbFastBoot::from_info(&info)
             .map_err(|e| FastbootError::ProtocolError(e.to_string()))?;
-        
+
         self.device = Some(fb);
         Ok(())
     }
 
     pub async fn get_var(&mut self, var: &str) -> Result<String, FastbootError> {
-        let device = self.device.as_mut()
-            .ok_or(FastbootError::NoDevice)?;
-        
-        let value = device.get_var(var)
+        let device = self.device.as_mut().ok_or(FastbootError::NoDevice)?;
+
+        let value = device
+            .get_var(var)
             .await
             .map_err(|e| FastbootError::ProtocolError(e.to_string()))?;
-        
+
         Ok(value)
     }
 
     pub async fn get_all_vars(&mut self) -> Result<FastbootDeviceInfo, FastbootError> {
-        let device = self.device.as_mut()
-            .ok_or(FastbootError::NoDevice)?;
-        
-        let serial = device.get_var("serialno")
+        let device = self.device.as_mut().ok_or(FastbootError::NoDevice)?;
+
+        let serial = device
+            .get_var("serialno")
             .await
             .unwrap_or_else(|_| "unknown".to_string());
         let product = device.get_var("product").await.ok();
@@ -120,7 +121,7 @@ impl FastbootCore {
         let dev = device.get_var("device").await.ok();
         let bootloader = device.get_var("bootloader").await.ok();
         let version = device.get_var("version").await.ok();
-        
+
         Ok(FastbootDeviceInfo {
             serial,
             product,
@@ -131,68 +132,77 @@ impl FastbootCore {
         })
     }
 
-    pub async fn flash(&mut self, partition: FlashPartition, image_path: &str) -> Result<(), FastbootError> {
-        let device = self.device.as_mut()
-            .ok_or(FastbootError::NoDevice)?;
-        
-        let data = std::fs::read(image_path)
-            .map_err(|e| FastbootError::IoError(e))?;
-        
+    pub async fn flash(
+        &mut self,
+        partition: FlashPartition,
+        image_path: &str,
+    ) -> Result<(), FastbootError> {
+        let device = self.device.as_mut().ok_or(FastbootError::NoDevice)?;
+
+        let data = std::fs::read(image_path).map_err(|e| FastbootError::IoError(e))?;
+
         let size = data.len() as u32;
-        
-        let mut downloader = device.download(size)
+
+        let mut downloader = device
+            .download(size)
             .await
             .map_err(|e| FastbootError::ProtocolError(e.to_string()))?;
-        
-        downloader.extend_from_slice(&data).await
-            .map_err(|e| FastbootError::ProtocolError(e.to_string()))?;
-        
-        device.flash(partition.as_str())
+
+        downloader
+            .extend_from_slice(&data)
             .await
             .map_err(|e| FastbootError::ProtocolError(e.to_string()))?;
-        
+
+        device
+            .flash(partition.as_str())
+            .await
+            .map_err(|e| FastbootError::ProtocolError(e.to_string()))?;
+
         Ok(())
     }
 
     pub async fn erase(&mut self, partition: FlashPartition) -> Result<(), FastbootError> {
-        let device = self.device.as_mut()
-            .ok_or(FastbootError::NoDevice)?;
-        
-        device.erase(partition.as_str())
+        let device = self.device.as_mut().ok_or(FastbootError::NoDevice)?;
+
+        device
+            .erase(partition.as_str())
             .await
             .map_err(|e| FastbootError::ProtocolError(e.to_string()))?;
-        
+
         Ok(())
     }
 
     pub async fn reboot(&mut self) -> Result<(), FastbootError> {
-        let device = self.device.as_mut()
-            .ok_or(FastbootError::NoDevice)?;
-        
-        device.reboot()
+        let device = self.device.as_mut().ok_or(FastbootError::NoDevice)?;
+
+        device
+            .reboot()
             .await
             .map_err(|e| FastbootError::ProtocolError(e.to_string()))?;
-        
+
         Ok(())
     }
 
     pub async fn continue_boot(&mut self) -> Result<(), FastbootError> {
-        let device = self.device.as_mut()
-            .ok_or(FastbootError::NoDevice)?;
-        
-        device.continue_boot()
+        let device = self.device.as_mut().ok_or(FastbootError::NoDevice)?;
+
+        device
+            .continue_boot()
             .await
             .map_err(|e| FastbootError::ProtocolError(e.to_string()))?;
-        
+
         Ok(())
     }
 
-    pub async fn get_var_partition_type(&mut self, partition: &str) -> Result<String, FastbootError> {
-        let device = self.device.as_mut()
-            .ok_or(FastbootError::NoDevice)?;
-        
+    pub async fn get_var_partition_type(
+        &mut self,
+        partition: &str,
+    ) -> Result<String, FastbootError> {
+        let device = self.device.as_mut().ok_or(FastbootError::NoDevice)?;
+
         let var_name = format!("partition-type:{}", partition);
-        device.get_var(&var_name)
+        device
+            .get_var(&var_name)
             .await
             .map_err(|e| FastbootError::ProtocolError(e.to_string()))
     }
@@ -206,41 +216,42 @@ impl FastbootCore {
     }
 
     pub async fn reboot_bootloader(&mut self) -> Result<(), FastbootError> {
-        let device = self.device.as_mut()
-            .ok_or(FastbootError::NoDevice)?;
-        
-        device.reboot_bootloader()
+        let device = self.device.as_mut().ok_or(FastbootError::NoDevice)?;
+
+        device
+            .reboot_bootloader()
             .await
             .map_err(|e| FastbootError::ProtocolError(e.to_string()))?;
-        
+
         Ok(())
     }
 
     pub async fn powerdown(&mut self) -> Result<(), FastbootError> {
-        let device = self.device.as_mut()
-            .ok_or(FastbootError::NoDevice)?;
-        
+        let device = self.device.as_mut().ok_or(FastbootError::NoDevice)?;
+
         // Use get_var to send raw command
-        let _ = device.get_var("powerdown")
+        let _ = device
+            .get_var("powerdown")
             .await
             .map_err(|e| FastbootError::ProtocolError(e.to_string()));
-        
+
         Ok(())
     }
 
     pub async fn wipe_userdata(&mut self) -> Result<(), FastbootError> {
-        let device = self.device.as_mut()
-            .ok_or(FastbootError::NoDevice)?;
-        
+        let device = self.device.as_mut().ok_or(FastbootError::NoDevice)?;
+
         // Erase userdata and cache
-        device.erase("userdata")
+        device
+            .erase("userdata")
             .await
             .map_err(|e| FastbootError::ProtocolError(e.to_string()))?;
-        
-        let _ = device.erase("cache")
+
+        let _ = device
+            .erase("cache")
             .await
             .map_err(|e| FastbootError::ProtocolError(e.to_string()));
-        
+
         Ok(())
     }
 }

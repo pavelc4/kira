@@ -1,4 +1,7 @@
-use crate::device::{get_build_info, get_max_refresh_rate, get_storage, parse_battery, reboot, shell_cmd, DeviceInfo, RebootMode};
+use crate::device::{
+    DeviceInfo, RebootMode, get_build_info, get_max_refresh_rate, get_storage, parse_battery,
+    reboot, shell_cmd,
+};
 use adb_client::server::ADBServer;
 use adb_client::server_device::ADBServerDevice;
 use anyhow::Result;

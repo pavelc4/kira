@@ -23,8 +23,8 @@ impl From<RebootMode> for adb_client::RebootType {
     }
 }
 
-use adb_client::server_device::ADBServerDevice;
 use adb_client::ADBDeviceExt;
+use adb_client::server_device::ADBServerDevice;
 
 pub fn reboot(device: &mut ADBServerDevice, mode: RebootMode) -> Result<(), anyhow::Error> {
     let reboot_type: adb_client::RebootType = mode.into();

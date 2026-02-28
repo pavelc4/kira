@@ -1,5 +1,5 @@
-use adb_client::server_device::ADBServerDevice;
 use adb_client::ADBDeviceExt;
+use adb_client::server_device::ADBServerDevice;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]

@@ -1,5 +1,5 @@
-use adb_client::server_device::ADBServerDevice;
 use adb_client::ADBDeviceExt;
+use adb_client::server_device::ADBServerDevice;
 
 pub fn is_rooted(device: &mut ADBServerDevice) -> bool {
     let output = run_shell_command(device, "id");

@@ -1,4 +1,4 @@
-use kira_core::device::{parse_logcat_line, LogLevel, LogcatBuffer, LogcatEntry, LogcatFilter};
+use kira_core::device::{LogLevel, LogcatBuffer, LogcatEntry, LogcatFilter, parse_logcat_line};
 
 #[test]
 fn test_parse_real_logcat_line_threadtime() {

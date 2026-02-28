@@ -1,7 +1,7 @@
 use crate::BuildInfo;
 use crate::Storage;
-use adb_client::server_device::ADBServerDevice;
 use adb_client::ADBDeviceExt;
+use adb_client::server_device::ADBServerDevice;
 
 pub fn get_max_refresh_rate(device: &mut ADBServerDevice) -> Option<u32> {
     let output = shell_cmd(device, "dumpsys display")?;
@@ -17,11 +17,7 @@ pub fn get_max_refresh_rate(device: &mut ADBServerDevice) -> Option<u32> {
         }
     }
 
-    if max_rate > 0 {
-        Some(max_rate)
-    } else {
-        None
-    }
+    if max_rate > 0 { Some(max_rate) } else { None }
 }
 
 fn extract_refresh_rate(line: &str) -> Option<u32> {
