@@ -196,9 +196,62 @@ pub fn get_cpu_info(device: &mut ADBServerDevice) -> Result<Vec<CpuInfo>, Perfor
     Ok(cpus)
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct FpsData {
+    pub flips: u64,
+    pub timestamp_ms: u64,
+}
+
+pub fn parse_flips_count(output: &str) -> Option<u64> {
+    for line in output.lines() {
+        let line = line.trim();
+        if let Some(idx) = line.find("flips=") {
+            let remain = &line[idx + 6..];
+            let digits: String = remain.chars().take_while(|c| c.is_ascii_digit()).collect();
+            if let Ok(flips) = digits.parse::<u64>() {
+                return Some(flips);
+            }
+        }
+    }
+    None
+}
+
+pub fn get_flips_count(device: &mut ADBServerDevice) -> Result<FpsData, PerformanceError> {
+    let output = run_shell_command(device, "dumpsys SurfaceFlinger")?;
+    let timestamp_ms = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis() as u64;
+
+    if let Some(flips) = parse_flips_count(&output) {
+        Ok(FpsData {
+            flips,
+            timestamp_ms,
+        })
+    } else {
+        Err(PerformanceError::ParseError(
+            "Could not find flips count".to_string(),
+        ))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_parse_flips_count() {
+        let sample_output = "Build: android
+flips=123456
+OtherSurface=888";
+        assert_eq!(parse_flips_count(sample_output), Some(123456));
+
+        let sample_output_inline = "Some state information flips=9992 ";
+        assert_eq!(parse_flips_count(sample_output_inline), Some(9992));
+
+        let sample_no_flips = "Build: android\nOtherSurface=888";
+        assert_eq!(parse_flips_count(sample_no_flips), None);
+    }
 
     #[test]
     fn test_parse_cpu_stat() {
