@@ -17,6 +17,20 @@
 	let chartContainerFps: HTMLElement;
 	let coreCharts: HTMLElement[] = [];
 
+	let chartTotal: any;
+	let chartMemory: any;
+	let chartFps: any;
+	let dataCpu = Array(40).fill(0);
+	let dataMem = Array(40).fill(0);
+	let dataFps = Array(40).fill(0);
+
+	let topPackageName = 'Browser';
+	let currentFps = 0;
+	let currentCpu = 0;
+	let currentMem = 0;
+	let memStr = '0MB';
+	let lastFpsData: any = null;
+
 	let processes = [
 		{ name: 'com.android.systemui', pid: '1432', cpu: '12.4', mem: '452 MB', isSys: true },
 		{ name: 'com.whatsapp', pid: '8921', cpu: '2.1', mem: '180 MB', isSys: false },
@@ -56,18 +70,27 @@
 			tooltip: { fixed: { enabled: false }, marker: { show: false } }
 		});
 
-		new ApexCharts(chartContainerTotal, {
+		dataCpu = genData(40, 20, 40);
+		dataMem = genData(40, 50, 70);
+		dataFps = genData(40, 0, 10);
+
+		chartTotal = new ApexCharts(chartContainerTotal, {
 			...getBaseChartConfig('#4ADE80', 60),
-			series: [{ data: genData(40, 20, 90) }]
-		}).render();
-		new ApexCharts(chartContainerMemory, {
+			series: [{ data: dataCpu }]
+		});
+		chartTotal.render();
+
+		chartMemory = new ApexCharts(chartContainerMemory, {
 			...getBaseChartConfig('#A78BFA', 60),
-			series: [{ data: genData(40, 75, 85) }]
-		}).render();
-		new ApexCharts(chartContainerFps, {
+			series: [{ data: dataMem }]
+		});
+		chartMemory.render();
+
+		chartFps = new ApexCharts(chartContainerFps, {
 			...getBaseChartConfig('#F97316', 60),
-			series: [{ data: genData(40, 10, 60) }]
-		}).render();
+			series: [{ data: dataFps }]
+		});
+		chartFps.render();
 
 		for (let i = 0; i < 8; i++) {
 			if (coreCharts[i]) {
@@ -78,6 +101,55 @@
 				}).render();
 			}
 		}
+
+		setInterval(async () => {
+			if (isTauri && invoke && selectedDevice) {
+				try {
+					const topPkg = await invoke('get_top_package', { serial: selectedDevice });
+					if (topPkg && topPkg.name) {
+						topPackageName = topPkg.name;
+					}
+
+					const perf = await invoke('get_performance_profile', { serial: selectedDevice });
+					
+					if (perf.memory && perf.memory.Ok) {
+						const memInfo = perf.memory.Ok;
+						currentMem = Math.round(((memInfo.total - memInfo.available) / memInfo.total) * 100);
+						memStr = `${Math.round((memInfo.total - memInfo.available) / 1024)}MB`;
+						dataMem.push(currentMem);
+						dataMem.shift();
+						chartMemory.updateSeries([{ data: dataMem }]);
+					}
+
+					if (perf.cpu && perf.cpu.Ok && perf.cpu.Ok.length > 0) {
+						currentCpu = Math.round(perf.cpu.Ok[0].usage);
+						dataCpu.push(currentCpu);
+						dataCpu.shift();
+						chartTotal.updateSeries([{ data: dataCpu }]);
+					}
+
+					if (perf.fps && perf.fps.Ok) {
+						const fpsData = perf.fps.Ok;
+						if (fpsData.flips !== null && lastFpsData !== null && fpsData.flips > lastFpsData.flips) {
+							const deltaFlips = fpsData.flips - lastFpsData.flips;
+							const deltaTime = fpsData.timestamp_ms - lastFpsData.timestamp_ms;
+							if (deltaTime > 0) {
+								currentFps = Math.round((deltaFlips * 1000) / deltaTime);
+							}
+						} else if (lastFpsData !== null && fpsData.flips === lastFpsData.flips) {
+							currentFps = 0; // Screen is static
+						}
+						lastFpsData = fpsData;
+						
+						dataFps.push(currentFps);
+						dataFps.shift();
+						chartFps.updateSeries([{ data: dataFps }]);
+					}
+				} catch (e) {
+					console.error("Polling error", e);
+				}
+			}
+		}, 1000);
 	});
 
 	async function loadDevices() {
@@ -300,7 +372,7 @@
 					>
 						<div class="flex justify-between items-center mb-1">
 							<span class="text-xs font-medium text-on-surface-variant">CPU Overall</span>
-							<span class="text-sm font-bold text-primary">48%</span>
+							<span class="text-sm font-bold text-primary">{currentCpu}%</span>
 						</div>
 						<div bind:this={chartContainerTotal} class="h-[60px] w-full"></div>
 					</div>
@@ -309,8 +381,8 @@
 						class="rounded-[20px] bg-surface-container-high p-5 transition-colors hover:bg-surface-container-highest"
 					>
 						<div class="flex justify-between items-center mb-1">
-							<span class="text-xs font-medium text-on-surface-variant">Memory (82%)</span>
-							<span class="text-sm font-bold text-tertiary">2973MB</span>
+							<span class="text-xs font-medium text-on-surface-variant">Memory ({currentMem}%)</span>
+							<span class="text-sm font-bold text-tertiary">{memStr}</span>
 						</div>
 						<div bind:this={chartContainerMemory} class="h-[60px] w-full"></div>
 					</div>
@@ -319,8 +391,8 @@
 						class="rounded-[20px] bg-surface-container-high p-5 transition-colors hover:bg-surface-container-highest"
 					>
 						<div class="flex justify-between items-center mb-1">
-							<span class="text-xs font-medium text-on-surface-variant">FPS Browser</span>
-							<span class="text-sm font-bold text-secondary">29</span>
+							<span class="text-xs font-medium text-on-surface-variant">FPS {topPackageName}</span>
+							<span class="text-sm font-bold text-secondary">{currentFps > 0 ? currentFps : '-'}</span>
 						</div>
 						<div bind:this={chartContainerFps} class="h-[60px] w-full"></div>
 					</div>

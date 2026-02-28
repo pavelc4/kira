@@ -1,8 +1,12 @@
 use adb_client::server::ADBServer;
 use adb_client::server_device::ADBServerDevice;
+use kira_core::device::performance::{
+    BatteryInfo, CpuInfo, FpsData, MemoryInfo, get_battery_info, get_cpu_info, get_flips_count,
+    get_memory_info,
+};
 use kira_core::device::{
-    self, get_app_info, install_app, list_installed_packages, uninstall_app, AppInfo,
-    InstallResult, PackageFilter, UninstallResult,
+    self, AppInfo, InstallResult, PackageFilter, TopPackage, UninstallResult, get_app_info,
+    install_app, list_installed_packages, uninstall_app,
 };
 use serde::{Deserialize, Serialize};
 use std::net::{Ipv4Addr, SocketAddrV4};
@@ -154,6 +158,39 @@ fn reboot_device(serial: String, mode: String) -> Result<(), String> {
     device::reboot(&mut device, reboot_mode).map_err(|e| e.to_string())
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+pub struct PerformanceProfile {
+    pub memory: Result<MemoryInfo, String>,
+    pub battery: Result<BatteryInfo, String>,
+    pub cpu: Result<Vec<CpuInfo>, String>,
+    pub fps: Result<FpsData, String>,
+}
+
+#[command]
+fn get_performance_profile(serial: String) -> Result<PerformanceProfile, String> {
+    let _addr = SocketAddrV4::new(Ipv4Addr::LOCALHOST, 5037);
+    let mut device = ADBServerDevice::new(serial, None);
+
+    let memory = get_memory_info(&mut device).map_err(|e| e.to_string());
+    let battery = get_battery_info(&mut device).map_err(|e| e.to_string());
+    let cpu = get_cpu_info(&mut device).map_err(|e| e.to_string());
+    let fps = get_flips_count(&mut device).map_err(|e| e.to_string());
+
+    Ok(PerformanceProfile {
+        memory,
+        battery,
+        cpu,
+        fps,
+    })
+}
+
+#[command]
+fn get_top_package(serial: String) -> Result<TopPackage, String> {
+    let _addr = SocketAddrV4::new(Ipv4Addr::LOCALHOST, 5037);
+    let mut device = ADBServerDevice::new(serial, None);
+    device::get_top_package(&mut device).map_err(|e| e.to_string())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -169,6 +206,8 @@ pub fn run() {
             kill_process,
             kill_package,
             reboot_device,
+            get_performance_profile,
+            get_top_package,
         ])
         .setup(|app| {
             if cfg!(debug_assertions) {

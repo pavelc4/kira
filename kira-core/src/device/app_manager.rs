@@ -18,6 +18,12 @@ pub struct AppInfo {
     pub is_enabled: bool,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TopPackage {
+    pub name: String,
+    pub pid: Option<u32>,
+}
+
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 pub enum InstallLocation {
     Auto,
@@ -426,6 +432,53 @@ impl std::fmt::Display for AppManagerError {
 
 impl std::error::Error for AppManagerError {}
 
+pub fn parse_top_package(output: &str) -> TopPackage {
+    let mut top_line = "";
+    for line in output.lines() {
+        if line.contains("top-activity") {
+            top_line = line.trim();
+            break;
+        }
+    }
+
+    if top_line.is_empty() {
+        return TopPackage {
+            name: "".to_string(),
+            pid: None,
+        };
+    }
+
+    let parts: Vec<&str> = top_line.split_whitespace().collect();
+    if parts.len() >= 2 {
+        let pkg_part = parts[parts.len() - 2];
+        let subparts: Vec<&str> = pkg_part.split(':').collect();
+        if subparts.len() == 2 {
+            let pid = subparts[0].parse::<u32>().ok();
+            let mut name = subparts[1].to_string();
+            if let Some(slash_idx) = name.find('/') {
+                name = name[..slash_idx].to_string();
+            }
+            return TopPackage { name, pid };
+        }
+    }
+
+    TopPackage {
+        name: "".to_string(),
+        pid: None,
+    }
+}
+
+pub fn get_top_package(device: &mut ADBServerDevice) -> Result<TopPackage, AppManagerError> {
+    let command = "dumpsys activity";
+    let mut output = Vec::new();
+    device
+        .shell_command(&command, Some(&mut output), None)
+        .map_err(|e| AppManagerError::CommandFailed(e.to_string()))?;
+
+    let out_str = String::from_utf8(output).unwrap_or_default();
+    Ok(parse_top_package(&out_str))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -681,5 +734,25 @@ mod tests {
         let activity = "com.example.app/.MainActivity";
         let command = format!("am start -n {}", activity);
         assert_eq!(command, "am start -n com.example.app/.MainActivity");
+    }
+
+    #[test]
+    fn test_parse_top_package_valid() {
+        let sample_output = "
+  some random stuff
+  top-activity 4567:com.something.app/com.something.MainActivity another_thing
+  more text
+";
+        let top = parse_top_package(sample_output);
+        assert_eq!(top.name, "com.something.app");
+        assert_eq!(top.pid, Some(4567));
+    }
+
+    #[test]
+    fn test_parse_top_package_empty() {
+        let sample_output = "No top-activity here";
+        let top = parse_top_package(sample_output);
+        assert_eq!(top.name, "");
+        assert_eq!(top.pid, None);
     }
 }
