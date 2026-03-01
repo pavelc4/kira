@@ -23,7 +23,7 @@
 		"@sveltejs/vite-plugin-svelte": "^6.2.4",
 		"@tailwindcss/vite": "^4.2.1",
 		"@tauri-apps/cli": "^2.10.0",
-		"@types/node": "^24",
+		"@types/node": "^25",
 		"apexcharts": "^5.6.0",
 		"autoprefixer": "^10.4.27",
 		"eslint": "^10.0.2",
