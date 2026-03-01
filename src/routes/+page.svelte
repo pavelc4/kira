@@ -24,8 +24,10 @@
 	let dataCpu = Array(40).fill(0);
 	let dataMem = Array(40).fill(0);
 	let dataFps = Array(40).fill(0);
-	
-	let dataCores = Array(8).fill(0).map(() => Array(25).fill(0));
+
+	let dataCores = Array(8)
+		.fill(0)
+		.map(() => Array(25).fill(0));
 	let coreUsages = Array(8).fill(0);
 	let coreSpeeds = Array(8).fill(0);
 
@@ -36,7 +38,7 @@
 	let memStr = '0MB';
 	let uptimeStr = '0:00:00:00';
 	let lastFpsData: any = null;
-    let lastCpuData: any = null;
+	let lastCpuData: any = null;
 
 	let processes: any[] = [];
 
@@ -118,10 +120,12 @@
 					}
 
 					const perf = await invoke('get_performance_profile', { serial: selectedDevice });
-					
+
 					if (perf.memory && perf.memory.Ok) {
 						const memInfo = perf.memory.Ok;
-						currentMem = Math.round(((memInfo.total_kb - memInfo.available_kb) / memInfo.total_kb) * 100);
+						currentMem = Math.round(
+							((memInfo.total_kb - memInfo.available_kb) / memInfo.total_kb) * 100
+						);
 						memStr = `${Math.round((memInfo.total_kb - memInfo.available_kb) / 1024)}MB`;
 						dataMem.push(currentMem);
 						dataMem.shift();
@@ -141,42 +145,69 @@
 					if (perf.cpu && perf.cpu.Ok && perf.cpu.Ok.length > 0) {
 						const currentCpus = perf.cpu.Ok;
 
-                        if (lastCpuData !== null && currentCpus.length > 0 && lastCpuData.length > 0) {
-                            const curr = currentCpus[0].times;
-                            const prev = lastCpuData[0].times;
-                            
-                            const c_total = curr.user + curr.nice + curr.sys + curr.idle + curr.iowait + curr.irq + curr.softirq;
-                            const p_total = prev.user + prev.nice + prev.sys + prev.idle + prev.iowait + prev.irq + prev.softirq;
-                            
-                            const totalDelta = c_total - p_total;
-                            const idleDelta = (curr.idle + curr.iowait) - (prev.idle + prev.iowait);
-                            
-                            if (totalDelta > 0) {
-                                currentCpu = Math.round(100 * (1 - (idleDelta / totalDelta)));
-                            }
+						if (lastCpuData !== null && currentCpus.length > 0 && lastCpuData.length > 0) {
+							const curr = currentCpus[0].times;
+							const prev = lastCpuData[0].times;
+
+							const c_total =
+								curr.user +
+								curr.nice +
+								curr.sys +
+								curr.idle +
+								curr.iowait +
+								curr.irq +
+								curr.softirq;
+							const p_total =
+								prev.user +
+								prev.nice +
+								prev.sys +
+								prev.idle +
+								prev.iowait +
+								prev.irq +
+								prev.softirq;
+
+							const totalDelta = c_total - p_total;
+							const idleDelta = curr.idle + curr.iowait - (prev.idle + prev.iowait);
+
+							if (totalDelta > 0) {
+								currentCpu = Math.round(100 * (1 - idleDelta / totalDelta));
+							}
 
 							// Update individual cores
-							for(let i = 1; i < currentCpus.length; i++) {
+							for (let i = 1; i < currentCpus.length; i++) {
 								let cpuName = currentCpus[i].name;
 								if (!cpuName || !cpuName.startsWith('cpu')) continue;
-								
+
 								let idxStr = cpuName.replace('cpu', '');
 								let idx = parseInt(idxStr);
 								if (isNaN(idx) || idx < 0 || idx >= 8) continue;
-								
+
 								let c_prv_cpu = lastCpuData.find((c: any) => c.name === cpuName);
 
 								if (c_prv_cpu) {
 									let c_cur = currentCpus[i].times;
 									let c_prv = c_prv_cpu.times;
 
-									let core_tot = (c_cur.user + c_cur.nice + c_cur.sys + c_cur.idle + c_cur.iowait + c_cur.irq + c_cur.softirq) - 
-												   (c_prv.user + c_prv.nice + c_prv.sys + c_prv.idle + c_prv.iowait + c_prv.irq + c_prv.softirq);
-									let core_idle = (c_cur.idle + c_cur.iowait) - (c_prv.idle + c_prv.iowait);
+									let core_tot =
+										c_cur.user +
+										c_cur.nice +
+										c_cur.sys +
+										c_cur.idle +
+										c_cur.iowait +
+										c_cur.irq +
+										c_cur.softirq -
+										(c_prv.user +
+											c_prv.nice +
+											c_prv.sys +
+											c_prv.idle +
+											c_prv.iowait +
+											c_prv.irq +
+											c_prv.softirq);
+									let core_idle = c_cur.idle + c_cur.iowait - (c_prv.idle + c_prv.iowait);
 
 									let u = 0;
 									if (core_tot > 0) {
-										u = Math.round(100 * (1 - (core_idle / core_tot)));
+										u = Math.round(100 * (1 - core_idle / core_tot));
 									}
 
 									coreUsages[idx] = u;
@@ -188,8 +219,8 @@
 								}
 							}
 						}
-                        
-                        lastCpuData = currentCpus;
+
+						lastCpuData = currentCpus;
 						dataCpu.push(currentCpu);
 						dataCpu.shift();
 						chartTotal.updateSeries([{ data: dataCpu }]);
@@ -197,7 +228,11 @@
 
 					if (perf.fps && perf.fps.Ok) {
 						const fpsData = perf.fps.Ok;
-						if (fpsData.flips !== null && lastFpsData !== null && fpsData.flips > lastFpsData.flips) {
+						if (
+							fpsData.flips !== null &&
+							lastFpsData !== null &&
+							fpsData.flips > lastFpsData.flips
+						) {
 							const deltaFlips = fpsData.flips - lastFpsData.flips;
 							const deltaTime = fpsData.timestamp_ms - lastFpsData.timestamp_ms;
 							if (deltaTime > 0) {
@@ -207,13 +242,13 @@
 							currentFps = 0; // Screen is static
 						}
 						lastFpsData = fpsData;
-						
+
 						dataFps.push(currentFps);
 						dataFps.shift();
 						chartFps.updateSeries([{ data: dataFps }]);
 					}
 				} catch (e) {
-					console.error("Polling error", e);
+					console.error('Polling error', e);
 					error = String(e);
 				} finally {
 					isPolling = false;
@@ -256,15 +291,15 @@
 				const rustProcs: any = await invoke('list_processes', {
 					serial: selectedDevice
 				});
-                if (rustProcs && rustProcs.length > 0) {
-                    processes = rustProcs.slice(0, 50).map((p: any) => ({
-                        name: p.name,
-                        pid: p.pid.toString(),
-                        cpu: p.cpu,
-                        mem: p.mem,
-                        isSys: p.user === 'root' || p.user === 'system'
-                    }));
-                }
+				if (rustProcs && rustProcs.length > 0) {
+					processes = rustProcs.slice(0, 50).map((p: any) => ({
+						name: p.name,
+						pid: p.pid.toString(),
+						cpu: p.cpu,
+						mem: p.mem,
+						isSys: p.user === 'root' || p.user === 'system'
+					}));
+				}
 			} else {
 				packages = ['com.example.app1', 'com.example.app2'];
 			}
@@ -289,7 +324,7 @@
 				{/if}
 			</h2>
 			<button
-				on:click={() => {
+				onclick={() => {
 					const theme =
 						document.documentElement.getAttribute('data-theme') === 'light' ? 'dark' : 'light';
 					document.documentElement.setAttribute('data-theme', theme);
@@ -302,7 +337,9 @@
 		</header>
 
 		{#if error}
-			<div class="bg-error/20 text-error border border-error/50 p-4 rounded-xl mb-4 font-medium break-words whitespace-pre-wrap">
+			<div
+				class="bg-error/20 text-error border border-error/50 p-4 rounded-xl mb-4 font-medium break-words whitespace-pre-wrap"
+			>
 				{error}
 			</div>
 		{/if}
@@ -326,11 +363,14 @@
 					>
 						<span class="material-symbols-outlined text-[18px]">restart_alt</span> Reboot
 					</button>
-					<button
-						class="flex items-center gap-2 rounded-2xl px-6 py-3 text-sm font-medium text-on-surface transition-all hover:bg-surface-variant border border-outline"
+					<a
+						href="/shell?serial={encodeURIComponent(selectedDevice)}&name={encodeURIComponent(
+							devices[0]?.name || ''
+						)}"
+						class="flex items-center gap-2 rounded-2xl px-6 py-3 text-sm font-medium text-on-surface transition-all hover:bg-surface-variant border border-outline no-underline"
 					>
 						<span class="material-symbols-outlined text-[18px]">terminal</span> Shell
-					</button>
+					</a>
 				</div>
 			</section>
 		{/if}
@@ -464,7 +504,8 @@
 						class="rounded-[20px] bg-surface-container-high p-5 transition-colors hover:bg-surface-container-highest"
 					>
 						<div class="flex justify-between items-center mb-1">
-							<span class="text-xs font-medium text-on-surface-variant">Memory ({currentMem}%)</span>
+							<span class="text-xs font-medium text-on-surface-variant">Memory ({currentMem}%)</span
+							>
 							<span class="text-sm font-bold text-tertiary">{memStr}</span>
 						</div>
 						<div bind:this={chartContainerMemory} class="h-[60px] w-full"></div>
@@ -475,7 +516,9 @@
 					>
 						<div class="flex justify-between items-center mb-1">
 							<span class="text-xs font-medium text-on-surface-variant">FPS {topPackageName}</span>
-							<span class="text-sm font-bold text-secondary">{currentFps > 0 ? currentFps : '-'}</span>
+							<span class="text-sm font-bold text-secondary"
+								>{currentFps > 0 ? currentFps : '-'}</span
+							>
 						</div>
 						<div bind:this={chartContainerFps} class="h-[60px] w-full"></div>
 					</div>
@@ -488,7 +531,8 @@
 						>
 							<div class="flex justify-between items-center mb-2">
 								<span class="text-[11px] font-medium text-on-surface-variant"
-									>CPU{i} <span class="ml-1">{coreSpeeds[i] ? coreSpeeds[i] + 'MHz' : '~'}</span></span
+									>CPU{i}
+									<span class="ml-1">{coreSpeeds[i] ? coreSpeeds[i] + 'MHz' : '~'}</span></span
 								>
 								<span class="text-[12px] font-bold text-primary">{coreUsages[i]}%</span>
 							</div>
