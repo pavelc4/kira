@@ -4,6 +4,7 @@ use kira_core::device::performance::{
     BatteryInfo, CpuInfo, FpsData, MemoryInfo, get_battery_info, get_cpu_info, get_flips_count,
     get_memory_info,
 };
+use kira_core::device::shell::{CommandOutput, ShellExecutor};
 use kira_core::device::{
     self, AppInfo, InstallResult, PackageFilter, TopPackage, UninstallResult, get_app_info,
     install_app, list_installed_packages, uninstall_app,
@@ -194,6 +195,14 @@ fn get_top_package(serial: String) -> Result<TopPackage, String> {
     device::get_top_package(&mut device).map_err(|e| e.to_string())
 }
 
+#[command]
+fn execute_shell_command(serial: String, command: String) -> Result<CommandOutput, String> {
+    let _addr = SocketAddrV4::new(Ipv4Addr::LOCALHOST, 5037);
+    let mut device = ADBServerDevice::new(serial, None);
+    let mut executor = ShellExecutor::new();
+    executor.execute(&mut device, &command).map_err(|e| e.to_string())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -211,6 +220,7 @@ pub fn run() {
             reboot_device,
             get_performance_profile,
             get_top_package,
+            execute_shell_command,
         ])
         .setup(|app| {
             if cfg!(debug_assertions) {
