@@ -50,7 +50,8 @@ data class BatteryInfo(
 
 data class FpsData(
     val flips: Long = 0,
-    val timestampMs: Long = 0
+    val timestampMs: Long = 0,
+    val isDirect: Boolean = false
 )
 
 
