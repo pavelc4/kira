@@ -30,3 +30,4 @@ vite.config.ts.timestamp-*
 #rust 
 target
 **/target
+android/gradle/gradle-daemon-jvm.properties
