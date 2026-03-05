@@ -1,10 +1,8 @@
 package id.xmsaether.kira.core.shell
 
-import id.xmsaether.kira.core.shizuku.ShizukuHelper
+import com.topjohnwu.superuser.Shell
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import java.io.BufferedReader
-import java.io.InputStreamReader
 
 data class CommandOutput(
     val stdout: String,
@@ -15,19 +13,23 @@ data class CommandOutput(
 
 object ShellExecutor {
 
+    init {
+        Shell.enableVerboseLogging = false
+        Shell.setDefaultBuilder(
+            Shell.Builder.create()
+                .setFlags(Shell.FLAG_REDIRECT_STDERR or Shell.FLAG_MOUNT_MASTER)
+                .setTimeout(10)
+        )
+    }
+
     suspend fun execute(command: String): CommandOutput = withContext(Dispatchers.IO) {
         val startTime = System.currentTimeMillis()
         try {
-            val process = Runtime.getRuntime().exec(arrayOf("sh", "-c", command))
-            
-            val stdout = BufferedReader(InputStreamReader(process.inputStream)).use { it.readText() }
-            val stderr = BufferedReader(InputStreamReader(process.errorStream)).use { it.readText() }
-            val exitCode = process.waitFor()
-            
+            val result = Shell.cmd(command).exec()
             CommandOutput(
-                stdout = stdout.trim(),
-                stderr = stderr.trim(),
-                exitCode = exitCode,
+                stdout = result.out.joinToString("\n").trim(),
+                stderr = result.err.joinToString("\n").trim(),
+                exitCode = result.code,
                 durationMs = System.currentTimeMillis() - startTime
             )
         } catch (e: Exception) {
@@ -43,16 +45,11 @@ object ShellExecutor {
     suspend fun executeAsRoot(command: String): CommandOutput = withContext(Dispatchers.IO) {
         val startTime = System.currentTimeMillis()
         try {
-            val process = Runtime.getRuntime().exec(arrayOf("su", "-c", command))
-            
-            val stdout = BufferedReader(InputStreamReader(process.inputStream)).use { it.readText() }
-            val stderr = BufferedReader(InputStreamReader(process.errorStream)).use { it.readText() }
-            val exitCode = process.waitFor()
-            
+            val result = Shell.cmd(command).exec()
             CommandOutput(
-                stdout = stdout.trim(),
-                stderr = stderr.trim(),
-                exitCode = exitCode,
+                stdout = result.out.joinToString("\n").trim(),
+                stderr = result.err.joinToString("\n").trim(),
+                exitCode = result.code,
                 durationMs = System.currentTimeMillis() - startTime
             )
         } catch (e: Exception) {
@@ -63,5 +60,9 @@ object ShellExecutor {
                 durationMs = System.currentTimeMillis() - startTime
             )
         }
+    }
+
+    fun isRootAvailable(): Boolean {
+        return Shell.isAppGrantedRoot() == true
     }
 }
