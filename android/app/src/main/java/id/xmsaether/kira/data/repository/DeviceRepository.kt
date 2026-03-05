@@ -35,7 +35,7 @@ object DeviceRepository {
         val memory = getMemoryInfo()
         val battery = getBatteryInfo()
         val cpuCores = getCpuInfo()
-        val fps = getFlipsCount()
+        val fps = getFps()
         val uptime = getUptime()
 
         return PerformanceProfile(
@@ -146,24 +146,36 @@ object DeviceRepository {
         return cpus
     }
 
-    private suspend fun getFlipsCount(): FpsData? {
-        val output = ShellExecutor.execute("dumpsys SurfaceFlinger").stdout
+    private suspend fun getFps(): FpsData? {
         val timestampMs = System.currentTimeMillis()
-        val flips = parseFlipsCount(output) ?: return null
-        return FpsData(flips = flips, timestampMs = timestampMs)
+
+        val primary = ShellExecutor.executeAsRoot("cat /sys/class/drm/sde-crtc-0/measured_fps").stdout
+        val fpsPrimary = parseDrmFps(primary)
+        if (fpsPrimary != null && fpsPrimary > 0) {
+            return FpsData(flips = (fpsPrimary * 100).toLong(), timestampMs = timestampMs, isDirect = true)
+        }
+
+        val fallback = ShellExecutor.executeAsRoot("cat /sys/class/drm/card0/fbc/fps").stdout
+        val fpsFallback = fallback.trim().toDoubleOrNull()
+        if (fpsFallback != null && fpsFallback > 0) {
+            return FpsData(flips = (fpsFallback * 100).toLong(), timestampMs = timestampMs, isDirect = true)
+        }
+
+        return null
     }
 
-    fun parseFlipsCount(output: String): Long? {
-        for (line in output.lines()) {
-            val trimmed = line.trim()
-            val idx = trimmed.indexOf("flips=")
-            if (idx >= 0) {
-                val remain = trimmed.substring(idx + 6)
-                val digits = remain.takeWhile { it.isDigit() }
-                return digits.toLongOrNull()
-            }
+    fun parseDrmFps(output: String): Double? {
+        val trimmed = output.trim()
+        if (trimmed.isBlank()) return null
+
+        val fpsIdx = trimmed.indexOf("fps:")
+        if (fpsIdx >= 0) {
+            val afterFps = trimmed.substring(fpsIdx + 4).trim()
+            val number = afterFps.takeWhile { it.isDigit() || it == '.' }
+            return number.toDoubleOrNull()
         }
-        return null
+
+        return trimmed.split("\\s+".toRegex()).firstOrNull()?.toDoubleOrNull()
     }
 
     private suspend fun getUptime(): Long {
