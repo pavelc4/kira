@@ -42,6 +42,7 @@
 	},
 	"dependencies": {
 		"@tauri-apps/api": "^2.10.1",
-		"sharp": "^0.34.5"
+		"sharp": "^0.34.5",
+		"tauri": "^0.15.0"
 	}
 }
