@@ -77,6 +77,10 @@ dependencies {
     // Coroutines
     implementation(libs.kotlinx.coroutines.android)
 
+    // Libsu (Root)
+    implementation(libs.libsu.core)
+    implementation(libs.libsu.service)
+
     // Vico Charts
     implementation(libs.vico.compose)
     implementation(libs.vico.compose.m3)
