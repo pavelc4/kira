@@ -4,9 +4,7 @@
 	let invoke: any;
 	let isTauri = false;
 
-	let devices: any[] = [
-		{ id: '1', name: 'Poco F5', status: 'Online', connection: 'USB', isPixel: false }
-	];
+	let devices: any[] = [];
 	let loading = true;
 	let error = '';
 	let selectedDevice = '';
@@ -264,7 +262,7 @@
 		try {
 			if (isTauri && invoke) {
 				const rustDevices = await invoke('get_devices');
-				if (rustDevices && rustDevices.length > 0) {
+				if (rustDevices) {
 					devices = rustDevices.map((d: any) => ({
 						id: d.serial,
 						name: d.model || d.serial,
@@ -272,14 +270,23 @@
 						connection: 'USB',
 						isPixel: false
 					}));
+				} else {
+					devices = [];
 				}
+			} else {
+				devices = [];
 			}
+			
 			if (devices.length > 0) {
 				selectedDevice = devices[0].id;
 				await loadPackages();
+			} else {
+				selectedDevice = '';
+				processes = [];
 			}
 		} catch (e) {
 			error = String(e);
+			devices = [];
 		} finally {
 			loading = false;
 		}
@@ -343,6 +350,24 @@
 				class="bg-error/20 text-error border border-error/50 p-4 rounded-xl mb-4 font-medium break-words whitespace-pre-wrap"
 			>
 				{error}
+			</div>
+		{/if}
+
+		{#if devices.length === 0}
+			<div class="flex flex-col items-center justify-center p-12 mt-10 rounded-[28px] bg-surface-container shadow-sm border border-outline-variant text-center">
+				<div class="flex h-20 w-20 items-center justify-center rounded-full bg-surface-container-highest text-on-surface-variant mb-6">
+					<span class="material-symbols-outlined text-[40px] opacity-80">usb_off</span>
+				</div>
+				<h3 class="text-xl font-bold tracking-tight text-on-surface mb-2">No Devices Connected</h3>
+				<p class="text-sm text-on-surface-variant max-w-md mx-auto mb-6">
+					Please connect an Android device via USB and ensure USB Debugging is enabled in Developer Options.
+				</p>
+				<button
+					class="flex items-center gap-2 rounded-full bg-primary px-6 py-3 text-sm font-medium text-on-primary transition-all hover:brightness-110 shadow-sm"
+					onclick={loadDevices}
+				>
+					<span class="material-symbols-outlined text-[18px]">refresh</span> Refresh Devices
+				</button>
 			</div>
 		{/if}
 
