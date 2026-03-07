@@ -248,7 +248,13 @@
 					}
 				} catch (e) {
 					console.error('Polling error', e);
-					error = String(e);
+					let errStr = String(e);
+					// Suppress showing huge red errors for detached devices, just trigger a reload
+					if (errStr.includes('device') && errStr.includes('not found')) {
+						await loadDevices();
+					} else {
+						error = errStr;
+					}
 				} finally {
 					isPolling = false;
 				}
