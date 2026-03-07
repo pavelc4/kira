@@ -120,11 +120,11 @@ fn check_root(serial: String) -> Result<bool, String> {
 }
 
 #[command]
-fn list_processes(serial: String) -> Result<Vec<device::ProcessInfo>, String> {
+fn list_processes(serial: String, apps_only: bool) -> Result<Vec<device::ProcessInfo>, String> {
     let _addr = SocketAddrV4::new(Ipv4Addr::LOCALHOST, 5037);
 
     let mut device = ADBServerDevice::new(serial, None);
-    device::list_processes(&mut device).map_err(|e| e.to_string())
+    device::list_processes(&mut device, apps_only).map_err(|e| e.to_string())
 }
 
 #[command]
@@ -200,7 +200,9 @@ fn execute_shell_command(serial: String, command: String) -> Result<CommandOutpu
     let _addr = SocketAddrV4::new(Ipv4Addr::LOCALHOST, 5037);
     let mut device = ADBServerDevice::new(serial, None);
     let mut executor = ShellExecutor::new();
-    executor.execute(&mut device, &command).map_err(|e| e.to_string())
+    executor
+        .execute(&mut device, &command)
+        .map_err(|e| e.to_string())
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]

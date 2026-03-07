@@ -41,6 +41,7 @@
 	let lastCpuData: any = null;
 
 	let processes: any[] = [];
+	let showSystemProcesses = false;
 
 	onMount(async () => {
 		try {
@@ -289,7 +290,8 @@
 		try {
 			if (isTauri && invoke) {
 				const rustProcs: any = await invoke('list_processes', {
-					serial: selectedDevice
+					serial: selectedDevice,
+					appsOnly: !showSystemProcesses
 				});
 				if (rustProcs && rustProcs.length > 0) {
 					processes = rustProcs.slice(0, 50).map((p: any) => ({
@@ -408,14 +410,30 @@
 		<section class="mb-10">
 			<div class="flex flex-col rounded-[24px] bg-surface-container p-6 shadow-sm">
 				<header class="mb-6 flex items-center justify-between">
-					<h3 class="text-lg font-bold tracking-tight text-on-surface flex items-center gap-3">
-						<div
-							class="flex h-10 w-10 items-center justify-center rounded-[14px] bg-secondary-container text-on-secondary-container"
+					<div class="flex items-center gap-4">
+						<h3 class="text-lg font-bold tracking-tight text-on-surface flex items-center gap-3">
+							<div
+								class="flex h-10 w-10 items-center justify-center rounded-[14px] bg-secondary-container text-on-secondary-container"
+							>
+								<span class="material-symbols-outlined text-[20px]">memory</span>
+							</div>
+							Process Manager
+						</h3>
+						
+						<button 
+							class="text-xs font-medium px-3 py-1.5 rounded-full transition-colors flex items-center gap-2 border {showSystemProcesses ? 'bg-primary/10 text-primary border-primary/20' : 'bg-surface-variant text-on-surface-variant border-transparent'}"
+							onclick={() => {
+								showSystemProcesses = !showSystemProcesses;
+								loadPackages();
+							}}
 						>
-							<span class="material-symbols-outlined text-[20px]">memory</span>
-						</div>
-						Process Manager
-					</h3>
+							<span class="material-symbols-outlined text-[14px]">
+								{showSystemProcesses ? 'toggle_on' : 'toggle_off'}
+							</span>
+							Show System
+						</button>
+					</div>
+					
 					<div class="relative">
 						<span
 							class="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-on-surface-variant text-[18px]"

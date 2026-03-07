@@ -20,7 +20,10 @@ pub struct MemoryInfo {
     pub low_memory: bool,
 }
 
-pub fn list_processes(device: &mut ADBServerDevice) -> Result<Vec<ProcessInfo>, ProcessError> {
+pub fn list_processes(
+    device: &mut ADBServerDevice,
+    apps_only: bool,
+) -> Result<Vec<ProcessInfo>, ProcessError> {
     // Try top command first to get CPU and Memory
     if let Ok(output) = run_shell_command(device, "top -n 1") {
         let mut start_idx = None;
@@ -81,17 +84,23 @@ pub fn list_processes(device: &mut ADBServerDevice) -> Result<Vec<ProcessInfo>, 
                             continue;
                         }
 
-                        processes.push(ProcessInfo {
+                        let process = ProcessInfo {
                             pid,
                             name,
-                            user,
+                            user: user.clone(),
                             cpu,
                             mem,
-                        });
+                        };
+
+                        if !apps_only || (user.starts_with("u0_a") || user.starts_with("u10")) {
+                            processes.push(process);
+                        }
                     }
                 }
             }
             if !processes.is_empty() {
+                // Limit to top 50 to avoid sending massive payloads over IPC
+                processes.truncate(50);
                 return Ok(processes);
             }
         }
@@ -100,7 +109,7 @@ pub fn list_processes(device: &mut ADBServerDevice) -> Result<Vec<ProcessInfo>, 
     // Fallback to ps
     let output = run_shell_command(device, "ps")?;
 
-    let processes: Vec<ProcessInfo> = output
+    let mut processes: Vec<ProcessInfo> = output
         .lines()
         .skip(1)
         .filter_map(|line| {
@@ -109,18 +118,26 @@ pub fn list_processes(device: &mut ADBServerDevice) -> Result<Vec<ProcessInfo>, 
                 let user = parts[0].to_string();
                 let pid = parts[1].parse::<u32>().ok()?;
                 let name = parts.last()?.to_string();
-                Some(ProcessInfo {
+                let process = ProcessInfo {
                     pid,
                     name,
-                    user,
+                    user: user.clone(),
                     cpu: "0".to_string(),
                     mem: "0".to_string(),
-                })
+                };
+
+                if !apps_only || (user.starts_with("u0_a") || user.starts_with("u10")) {
+                    Some(process)
+                } else {
+                    None
+                }
             } else {
                 None
             }
         })
         .collect();
+
+    processes.truncate(50);
 
     Ok(processes)
 }
@@ -208,7 +225,7 @@ pub fn find_process_by_package(
     device: &mut ADBServerDevice,
     package_name: &str,
 ) -> Result<Vec<ProcessInfo>, ProcessError> {
-    let processes = list_processes(device)?;
+    let processes = list_processes(device, false)?;
 
     let matching: Vec<ProcessInfo> = processes
         .into_iter()
