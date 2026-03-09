@@ -160,17 +160,8 @@ jobs:
       - name: Install frontend dependencies
         run: bun install
 
-      - name: Build the app
-        uses: tauri-apps/tauri-action@v0
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          tagName: ${{ github.ref_name }}
-          releaseName: 'Kira ${{ github.ref_name }}'
-          releaseBody: 'See the assets to download this version and install.'
-          releaseDraft: true
-          prerelease: false
-          args: ${{ matrix.args }}
+      - name: Build Tauri app
+        run: bun run tauri build ${{ matrix.args }}
 
       - name: Upload Desktop artifacts
         uses: actions/upload-artifact@v4
@@ -185,6 +176,61 @@ jobs:
             target/release/bundle/msi/*.msi
             target/release/bundle/nsis/*.exe
           if-no-files-found: ignore
+
+      - name: Send Desktop Build Error to Telegram
+        if: failure()
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          MESSAGE_ID: ${{ needs.init-build.outputs.message_id }}
+        run: |
+          VERSION="${{ needs.init-build.outputs.version }}"
+          PLATFORM="${{ matrix.name }}"
+          EMOJI="${{ matrix.emoji }}"
+          COMMIT_URL="${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }}"
+          WORKFLOW_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          
+          # Create error log
+          echo "Build failed for $PLATFORM" > build-error.txt
+          echo "Platform: $PLATFORM" >> build-error.txt
+          echo "Version: $VERSION" >> build-error.txt
+          echo "Commit: ${{ github.sha }}" >> build-error.txt
+          echo "Workflow: $WORKFLOW_URL" >> build-error.txt
+          echo "" >> build-error.txt
+          echo "Last 100 lines of build log:" >> build-error.txt
+          
+          # Send error notification
+          if [ -n "$MESSAGE_ID" ] && [ "$MESSAGE_ID" != "null" ]; then
+            COMMIT_MSG=$(git log -1 --pretty=format:"%s")
+            MESSAGE="🚀 <b>Kira $VERSION Release Build</b>
+
+            <blockquote><code>$COMMIT_MSG</code></blockquote>
+            
+            <b>Build Progress:</b>
+            <code>[▓▓░░░░░░░░░░░░] 15%</code>
+            
+            📦 Windows: <code>⏳ Building...</code>
+            🍎 macOS: <code>⏳ Building...</code>
+            🐧 Linux: <code>⏳ Building...</code>
+            🤖 Android: <code>⏳ Pending...</code>
+            
+            ❌ <b>$EMOJI $PLATFORM Build Failed!</b>
+            
+            <a href=\"$COMMIT_URL\">Commit</a> | <a href=\"$WORKFLOW_URL\">Workflow</a>"
+            
+            curl -s -X POST "https://botapi.arasea.dpdns.org/bot$TELEGRAM_BOT_TOKEN/editMessageText" \
+              -d chat_id="$TELEGRAM_CHAT_ID" \
+              -d message_id="$MESSAGE_ID" \
+              -d parse_mode="HTML" \
+              --data-urlencode "text=$MESSAGE" \
+              -d disable_web_page_preview="true"
+          fi
+          
+          # Send error log file
+          curl -s -X POST "https://botapi.arasea.dpdns.org/bot$TELEGRAM_BOT_TOKEN/sendDocument" \
+            -F chat_id="$TELEGRAM_CHAT_ID" \
+            -F document=@"build-error.txt" \
+            -F caption="❌ $EMOJI $PLATFORM Build Error Log"
 
   # Android build
   release-android:
@@ -305,15 +351,6 @@ jobs:
             --out app/build/outputs/apk/release/kira-release-signed.apk \
             app/build/outputs/apk/release/app-release-unsigned.apk
 
-      - name: Upload Android APK to Release
-        if: github.event_name == 'push'
-        uses: softprops/action-gh-release@v1
-        with:
-          files: android/app/build/outputs/apk/release/kira-release-signed.apk
-          draft: true
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
       - name: Upload Android artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -327,6 +364,61 @@ jobs:
         run: |
           rm -f android/app/release.keystore
           rm -f android/keystore.properties
+
+      - name: Send Android Build Error to Telegram
+        if: failure()
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          MESSAGE_ID: ${{ needs.init-build.outputs.message_id }}
+        run: |
+          VERSION="${{ needs.init-build.outputs.version }}"
+          COMMIT_URL="${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }}"
+          WORKFLOW_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          
+          # Create error log
+          echo "Android Build Failed" > build-error.txt
+          echo "Version: $VERSION" >> build-error.txt
+          echo "Commit: ${{ github.sha }}" >> build-error.txt
+          echo "Workflow: $WORKFLOW_URL" >> build-error.txt
+          echo "" >> build-error.txt
+          echo "Gradle build log:" >> build-error.txt
+          
+          # Try to get gradle log if exists
+          if [ -f "android/app/build/outputs/logs/gradle.log" ]; then
+            tail -n 200 android/app/build/outputs/logs/gradle.log >> build-error.txt
+          fi
+          
+          # Send error notification
+          if [ -n "$MESSAGE_ID" ] && [ "$MESSAGE_ID" != "null" ]; then
+            COMMIT_MSG=$(git log -1 --pretty=format:"%s")
+            MESSAGE="🚀 <b>Kira $VERSION Release Build</b>
+
+            <blockquote><code>$COMMIT_MSG</code></blockquote>
+            
+            <b>Build Progress:</b>
+            <code>[▓▓▓▓▓▓▓░░░░░░░] 50%</code>
+            
+            📦 Windows: <code>⏳ Building...</code>
+            🍎 macOS: <code>⏳ Building...</code>
+            🐧 Linux: <code>⏳ Building...</code>
+            🤖 Android: <code>❌ Failed!</code>
+            
+            <a href=\"$COMMIT_URL\">Commit</a> | <a href=\"$WORKFLOW_URL\">Workflow</a>"
+            
+            curl -s -X POST "https://botapi.arasea.dpdns.org/bot$TELEGRAM_BOT_TOKEN/editMessageText" \
+              -d chat_id="$TELEGRAM_CHAT_ID" \
+              -d message_id="$MESSAGE_ID" \
+              -d parse_mode="HTML" \
+              --data-urlencode "text=$MESSAGE" \
+              -d disable_web_page_preview="true"
+          fi
+          
+          # Send error log file
+          curl -s -X POST "https://botapi.arasea.dpdns.org/bot$TELEGRAM_BOT_TOKEN/sendDocument" \
+            -F chat_id="$TELEGRAM_CHAT_ID" \
+            -F document=@"build-error.txt" \
+            -F caption="❌ 🤖 Android Build Error Log"
 
   # Final step: Send all artifacts to Telegram
   send-artifacts:
@@ -457,8 +549,58 @@ jobs:
             -F document=@"$LINUX_DEB" \
             -F caption="🐧 Linux DEB Package"
 
+      - name: Send Build Summary on Failure
+        if: failure()
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          MESSAGE_ID: ${{ needs.init-build.outputs.message_id }}
+        run: |
+          VERSION="${{ needs.init-build.outputs.version }}"
+          COMMIT_MSG=$(git log -1 --pretty=format:"%s")
+          COMMIT_URL="${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }}"
+          WORKFLOW_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          
+          # Create comprehensive error log
+          echo "=== Kira Build Failed ===" > build-error-summary.txt
+          echo "Version: $VERSION" >> build-error-summary.txt
+          echo "Commit: $COMMIT_MSG" >> build-error-summary.txt
+          echo "Commit URL: $COMMIT_URL" >> build-error-summary.txt
+          echo "Workflow URL: $WORKFLOW_URL" >> build-error-summary.txt
+          echo "" >> build-error-summary.txt
+          echo "Failed Jobs:" >> build-error-summary.txt
+          echo "Check individual error logs for details" >> build-error-summary.txt
+          
+          # Update progress message with failure
+          if [ -n "$MESSAGE_ID" ] && [ "$MESSAGE_ID" != "null" ]; then
+            MESSAGE="🚀 <b>Kira $VERSION Release Build</b>
+
+            <blockquote><code>$COMMIT_MSG</code></blockquote>
+            
+            <b>Build Status:</b>
+            <code>[▓▓▓▓▓▓▓░░░░░░░] FAILED</code>
+            
+            ❌ <b>Build Failed!</b>
+            Check error logs for details.
+            
+            <a href=\"$COMMIT_URL\">Commit</a> | <a href=\"$WORKFLOW_URL\">Workflow</a>"
+            
+            curl -s -X POST "https://botapi.arasea.dpdns.org/bot$TELEGRAM_BOT_TOKEN/editMessageText" \
+              -d chat_id="$TELEGRAM_CHAT_ID" \
+              -d message_id="$MESSAGE_ID" \
+              -d parse_mode="HTML" \
+              --data-urlencode "text=$MESSAGE" \
+              -d disable_web_page_preview="true"
+          fi
+          
+          # Send summary error log
+          curl -s -X POST "https://botapi.arasea.dpdns.org/bot$TELEGRAM_BOT_TOKEN/sendDocument" \
+            -F chat_id="$TELEGRAM_CHAT_ID" \
+            -F document=@"build-error-summary.txt" \
+            -F caption="❌ Build Failed - Summary"
+
       - name: Delete progress message
-        if: always()
+        if: success()
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
