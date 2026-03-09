@@ -31,23 +31,42 @@
 | **App Manager** | Install and uninstall APKs |
 | **Batch Commands** | Automate workflows with bulk operations |
 
-## Quick Start
+## Installation
+
+Download the latest release for your platform from [Releases](https://github.com/pavelc4/kira/releases).
+
+## Development Setup
+
+For developers who want to contribute:
 
 ```bash
 git clone https://github.com/pavelc4/kira
 cd kira
+
+# Install dependencies
 bun install
-cargo tauri dev
+
+# Setup performance optimizations (Linux/Wayland only)
+./optimize-linux-wayland.sh
+
+# Run with X11 (recommended for best performance)
+bun run tauri:x11 dev
+
+# Or run with Wayland
+bun run tauri:wayland dev
 ```
+
+> **📖 Developer Guide**: See [CONTRIBUTING.md](CONTRIBUTING.md) for detailed development setup and guidelines.
 
 ## Platform Support
 
 | Platform | Status |
 |---|---|
 | Linux (Arch) | In Development |
-| Windows | Planned |
+| Linux (Ubuntu/Debian) | In Development |
+| Windows | In Development |
 | macOS | Planned |
-| Android | Planned |
+| Android | In Development |
 
 ## Tech Stack
 
