@@ -95,41 +95,6 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Update Progress - Building
-        if: matrix.platform != 'windows-latest'
-        env:
-          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-          MESSAGE_ID: ${{ needs.init-build.outputs.message_id }}
-        run: |
-          if [ -n "$MESSAGE_ID" ] && [ "$MESSAGE_ID" != "null" ]; then
-            VERSION="${{ needs.init-build.outputs.version }}"
-            COMMIT_MSG=$(git log -1 --pretty=format:"%s")
-            COMMIT_URL="${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }}"
-            WORKFLOW_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
-            
-            MESSAGE="🚀 <b>Kira $VERSION Release Build</b>
-
-            <blockquote><code>$COMMIT_MSG</code></blockquote>
-            
-            <b>Build Progress:</b>
-            <code>[▓▓░░░░░░░░░░░░] 15%</code>
-            
-            📦 Windows: <code>⏳ Building...</code>
-            🍎 macOS: <code>⏳ Building...</code>
-            🐧 Linux: <code>⏳ Building...</code>
-            🤖 Android: <code>⏳ Pending...</code>
-            
-            <a href=\"$COMMIT_URL\">Commit</a> | <a href=\"$WORKFLOW_URL\">Workflow</a>"
-            
-            curl -s -X POST "https://botapi.arasea.dpdns.org/bot$TELEGRAM_BOT_TOKEN/editMessageText" \
-              -d chat_id="$TELEGRAM_CHAT_ID" \
-              -d message_id="$MESSAGE_ID" \
-              -d parse_mode="HTML" \
-              --data-urlencode "text=$MESSAGE" \
-              -d disable_web_page_preview="true"
-          fi
-
       - name: Update Progress - Building (Windows)
         if: matrix.platform == 'windows-latest'
         shell: bash
@@ -309,40 +274,6 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-
-      - name: Update Progress - Android Building
-        env:
-          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-          MESSAGE_ID: ${{ needs.init-build.outputs.message_id }}
-        run: |
-          if [ -n "$MESSAGE_ID" ] && [ "$MESSAGE_ID" != "null" ]; then
-            VERSION="${{ needs.init-build.outputs.version }}"
-            COMMIT_MSG=$(git log -1 --pretty=format:"%s")
-            COMMIT_URL="${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }}"
-            WORKFLOW_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
-            
-            MESSAGE="🚀 <b>Kira $VERSION Release Build</b>
-
-            <blockquote><code>$COMMIT_MSG</code></blockquote>
-            
-            <b>Build Progress:</b>
-            <code>[▓▓▓▓▓▓▓░░░░░░░] 50%</code>
-            
-            📦 Windows: <code>⏳ Building...</code>
-            🍎 macOS: <code>⏳ Building...</code>
-            🐧 Linux: <code>⏳ Building...</code>
-            🤖 Android: <code>⏳ Building...</code>
-            
-            <a href=\"$COMMIT_URL\">Commit</a> | <a href=\"$WORKFLOW_URL\">Workflow</a>"
-            
-            curl -s -X POST "https://botapi.arasea.dpdns.org/bot$TELEGRAM_BOT_TOKEN/editMessageText" \
-              -d chat_id="$TELEGRAM_CHAT_ID" \
-              -d message_id="$MESSAGE_ID" \
-              -d parse_mode="HTML" \
-              --data-urlencode "text=$MESSAGE" \
-              -d disable_web_page_preview="true"
-          fi
 
       - name: Setup JDK 17
         uses: actions/setup-java@v4
