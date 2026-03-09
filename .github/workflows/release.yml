@@ -195,6 +195,7 @@ jobs:
             librsvg2-dev
 
       - name: Remove mold linker config (GitHub Actions)
+        shell: bash
         run: |
           if [ -f ".cargo/config.toml" ]; then
             # Backup original
