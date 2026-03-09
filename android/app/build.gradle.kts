@@ -6,6 +6,8 @@ import org.apache.http.entity.mime.content.FileBody
 import org.apache.http.impl.client.HttpClients
 import org.apache.http.util.EntityUtils
 import java.util.Date
+import java.util.Properties
+import java.io.FileInputStream
 import java.text.SimpleDateFormat
 import org.jetbrains.kotlin.gradle.plugin.getKotlinPluginVersion
 import java.io.ByteArrayOutputStream
@@ -49,8 +51,8 @@ android {
             // Load from keystore.properties if exists (for GitHub Actions)
             val keystorePropertiesFile = rootProject.file("keystore.properties")
             if (keystorePropertiesFile.exists()) {
-                val keystoreProperties = java.util.Properties()
-                keystoreProperties.load(java.io.FileInputStream(keystorePropertiesFile))
+                val keystoreProperties = Properties()
+                keystoreProperties.load(FileInputStream(keystorePropertiesFile))
                 
                 storeFile = file(keystoreProperties["storeFile"] as String)
                 storePassword = keystoreProperties["storePassword"] as String
