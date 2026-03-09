@@ -3,6 +3,9 @@ name = "kira-core"
 version = "0.1.0"
 edition = "2024"
 
+[lib]
+crate-type = ["cdylib", "rlib"]
+
 [dependencies]
 adb_client = "3.1.1"
 fastboot-protocol = "0.3.1"

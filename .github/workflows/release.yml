@@ -96,6 +96,43 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Update Progress - Building
+        if: matrix.platform != 'windows-latest'
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          MESSAGE_ID: ${{ needs.init-build.outputs.message_id }}
+        run: |
+          if [ -n "$MESSAGE_ID" ] && [ "$MESSAGE_ID" != "null" ]; then
+            VERSION="${{ needs.init-build.outputs.version }}"
+            COMMIT_MSG=$(git log -1 --pretty=format:"%s")
+            COMMIT_URL="${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }}"
+            WORKFLOW_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+            
+            MESSAGE="🚀 <b>Kira $VERSION Release Build</b>
+
+            <blockquote><code>$COMMIT_MSG</code></blockquote>
+            
+            <b>Build Progress:</b>
+            <code>[▓▓░░░░░░░░░░░░] 15%</code>
+            
+            📦 Windows: <code>⏳ Building...</code>
+            🍎 macOS: <code>⏳ Building...</code>
+            🐧 Linux: <code>⏳ Building...</code>
+            🤖 Android: <code>⏳ Pending...</code>
+            
+            <a href=\"$COMMIT_URL\">Commit</a> | <a href=\"$WORKFLOW_URL\">Workflow</a>"
+            
+            curl -s -X POST "https://botapi.arasea.dpdns.org/bot$TELEGRAM_BOT_TOKEN/editMessageText" \
+              -d chat_id="$TELEGRAM_CHAT_ID" \
+              -d message_id="$MESSAGE_ID" \
+              -d parse_mode="HTML" \
+              --data-urlencode "text=$MESSAGE" \
+              -d disable_web_page_preview="true"
+          fi
+
+      - name: Update Progress - Building (Windows)
+        if: matrix.platform == 'windows-latest'
+        shell: bash
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
@@ -157,13 +194,32 @@ jobs:
             libayatana-appindicator3-dev \
             librsvg2-dev
 
+      - name: Remove mold linker config (GitHub Actions)
+        run: |
+          if [ -f ".cargo/config.toml" ]; then
+            # Backup original
+            cp .cargo/config.toml .cargo/config.toml.bak
+            # Remove mold linker lines
+            sed -i.tmp '/fuse-ld=mold/d' .cargo/config.toml || true
+            rm -f .cargo/config.toml.tmp
+          fi
+
       - name: Install frontend dependencies
         run: bun install
 
       - name: Build Tauri app
-        run: bun run tauri build ${{ matrix.args }}
+        id: build
+        continue-on-error: true
+        run: |
+          bun run tauri build ${{ matrix.args }} 2>&1 | tee build.log
+          echo "build_status=${PIPESTATUS[0]}" >> $GITHUB_OUTPUT
+
+      - name: Check build status
+        if: steps.build.outputs.build_status != '0'
+        run: exit 1
 
       - name: Upload Desktop artifacts
+        if: steps.build.outputs.build_status == '0'
         uses: actions/upload-artifact@v4
         with:
           name: kira-desktop-${{ matrix.platform }}
@@ -179,6 +235,7 @@ jobs:
 
       - name: Send Desktop Build Error to Telegram
         if: failure()
+        shell: bash
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
@@ -190,14 +247,23 @@ jobs:
           COMMIT_URL="${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }}"
           WORKFLOW_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
           
-          # Create error log
-          echo "Build failed for $PLATFORM" > build-error.txt
+          # Create detailed error log
+          echo "=== Kira $PLATFORM Build Failed ===" > build-error.txt
+          echo "" >> build-error.txt
           echo "Platform: $PLATFORM" >> build-error.txt
           echo "Version: $VERSION" >> build-error.txt
           echo "Commit: ${{ github.sha }}" >> build-error.txt
           echo "Workflow: $WORKFLOW_URL" >> build-error.txt
           echo "" >> build-error.txt
-          echo "Last 100 lines of build log:" >> build-error.txt
+          echo "=== Build Log (Last 500 lines) ===" >> build-error.txt
+          echo "" >> build-error.txt
+          
+          # Get build log
+          if [ -f "build.log" ]; then
+            tail -n 500 build.log >> build-error.txt
+          else
+            echo "Build log not found" >> build-error.txt
+          fi
           
           # Send error notification
           if [ -n "$MESSAGE_ID" ] && [ "$MESSAGE_ID" != "null" ]; then
@@ -227,10 +293,12 @@ jobs:
           fi
           
           # Send error log file
-          curl -s -X POST "https://botapi.arasea.dpdns.org/bot$TELEGRAM_BOT_TOKEN/sendDocument" \
-            -F chat_id="$TELEGRAM_CHAT_ID" \
-            -F document=@"build-error.txt" \
-            -F caption="❌ $EMOJI $PLATFORM Build Error Log"
+          if [ -f "build-error.txt" ]; then
+            curl -s -X POST "https://botapi.arasea.dpdns.org/bot$TELEGRAM_BOT_TOKEN/sendDocument" \
+              -F chat_id="$TELEGRAM_CHAT_ID" \
+              -F document=@"build-error.txt" \
+              -F caption="❌ $EMOJI $PLATFORM Build Error Log"
+          fi
 
   # Android build
   release-android:
@@ -326,17 +394,26 @@ jobs:
       - name: Build Rust library for Android
         working-directory: kira-core
         run: |
-          cargo ndk -t arm64-v8a -o ../android/app/src/main/jniLibs build --release
+          cargo ndk -t arm64-v8a -o ../android/app/src/main/jniLibs/arm64-v8a build --release
 
       - name: Grant execute permission for gradlew
         working-directory: android
         run: chmod +x gradlew
 
       - name: Build Android Release APK
+        id: gradle-build
+        continue-on-error: true
         working-directory: android
-        run: ./gradlew assembleRelease
+        run: |
+          ./gradlew assembleRelease 2>&1 | tee gradle-build.log
+          echo "gradle_status=${PIPESTATUS[0]}" >> $GITHUB_OUTPUT
+
+      - name: Check Gradle build status
+        if: steps.gradle-build.outputs.gradle_status != '0'
+        run: exit 1
 
       - name: Sign APK
+        if: steps.gradle-build.outputs.gradle_status == '0'
         working-directory: android
         env:
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
@@ -367,6 +444,7 @@ jobs:
 
       - name: Send Android Build Error to Telegram
         if: failure()
+        shell: bash
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
@@ -376,17 +454,29 @@ jobs:
           COMMIT_URL="${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }}"
           WORKFLOW_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
           
-          # Create error log
-          echo "Android Build Failed" > build-error.txt
+          # Create detailed error log
+          echo "=== Kira Android Build Failed ===" > build-error.txt
+          echo "" >> build-error.txt
+          echo "Platform: Android" >> build-error.txt
           echo "Version: $VERSION" >> build-error.txt
           echo "Commit: ${{ github.sha }}" >> build-error.txt
           echo "Workflow: $WORKFLOW_URL" >> build-error.txt
           echo "" >> build-error.txt
-          echo "Gradle build log:" >> build-error.txt
+          echo "=== Gradle Build Log (Last 500 lines) ===" >> build-error.txt
+          echo "" >> build-error.txt
           
-          # Try to get gradle log if exists
-          if [ -f "android/app/build/outputs/logs/gradle.log" ]; then
-            tail -n 200 android/app/build/outputs/logs/gradle.log >> build-error.txt
+          # Get gradle log
+          if [ -f "android/gradle-build.log" ]; then
+            tail -n 500 android/gradle-build.log >> build-error.txt
+          else
+            echo "Gradle log not found" >> build-error.txt
+          fi
+          
+          # Also check for Rust build errors
+          echo "" >> build-error.txt
+          echo "=== Rust Build Errors (if any) ===" >> build-error.txt
+          if [ -d "kira-core/target" ]; then
+            find kira-core/target -name "*.log" -type f -exec tail -n 100 {} \; >> build-error.txt 2>/dev/null || true
           fi
           
           # Send error notification
@@ -415,10 +505,12 @@ jobs:
           fi
           
           # Send error log file
-          curl -s -X POST "https://botapi.arasea.dpdns.org/bot$TELEGRAM_BOT_TOKEN/sendDocument" \
-            -F chat_id="$TELEGRAM_CHAT_ID" \
-            -F document=@"build-error.txt" \
-            -F caption="❌ 🤖 Android Build Error Log"
+          if [ -f "build-error.txt" ]; then
+            curl -s -X POST "https://botapi.arasea.dpdns.org/bot$TELEGRAM_BOT_TOKEN/sendDocument" \
+              -F chat_id="$TELEGRAM_CHAT_ID" \
+              -F document=@"build-error.txt" \
+              -F caption="❌ 🤖 Android Build Error Log"
+          fi
 
   # Final step: Send all artifacts to Telegram
   send-artifacts:
@@ -551,6 +643,7 @@ jobs:
 
       - name: Send Build Summary on Failure
         if: failure()
+        shell: bash
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
@@ -561,15 +654,20 @@ jobs:
           COMMIT_URL="${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }}"
           WORKFLOW_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
           
-          # Create comprehensive error log
-          echo "=== Kira Build Failed ===" > build-error-summary.txt
+          # Create comprehensive error summary
+          echo "=== Kira Build Failed - Summary ===" > build-error-summary.txt
+          echo "" >> build-error-summary.txt
           echo "Version: $VERSION" >> build-error-summary.txt
           echo "Commit: $COMMIT_MSG" >> build-error-summary.txt
           echo "Commit URL: $COMMIT_URL" >> build-error-summary.txt
           echo "Workflow URL: $WORKFLOW_URL" >> build-error-summary.txt
           echo "" >> build-error-summary.txt
-          echo "Failed Jobs:" >> build-error-summary.txt
-          echo "Check individual error logs for details" >> build-error-summary.txt
+          echo "=== Failed Jobs ===" >> build-error-summary.txt
+          echo "" >> build-error-summary.txt
+          echo "One or more build jobs failed." >> build-error-summary.txt
+          echo "Check individual error logs for detailed information." >> build-error-summary.txt
+          echo "" >> build-error-summary.txt
+          echo "Individual error logs have been sent separately for each failed platform." >> build-error-summary.txt
           
           # Update progress message with failure
           if [ -n "$MESSAGE_ID" ] && [ "$MESSAGE_ID" != "null" ]; then
@@ -594,10 +692,12 @@ jobs:
           fi
           
           # Send summary error log
-          curl -s -X POST "https://botapi.arasea.dpdns.org/bot$TELEGRAM_BOT_TOKEN/sendDocument" \
-            -F chat_id="$TELEGRAM_CHAT_ID" \
-            -F document=@"build-error-summary.txt" \
-            -F caption="❌ Build Failed - Summary"
+          if [ -f "build-error-summary.txt" ]; then
+            curl -s -X POST "https://botapi.arasea.dpdns.org/bot$TELEGRAM_BOT_TOKEN/sendDocument" \
+              -F chat_id="$TELEGRAM_CHAT_ID" \
+              -F document=@"build-error-summary.txt" \
+              -F caption="❌ Build Failed - Summary"
+          fi
 
       - name: Delete progress message
         if: success()
