@@ -178,26 +178,38 @@ jobs:
         continue-on-error: true
         run: |
           bun run tauri build ${{ matrix.args }} 2>&1 | tee build.log
-          echo "build_status=${PIPESTATUS[0]}" >> $GITHUB_OUTPUT
+          BUILD_EXIT_CODE=${PIPESTATUS[0]}
+          echo "build_status=$BUILD_EXIT_CODE" >> $GITHUB_OUTPUT
+          
+          # List what was built
+          echo "=== Build Output ==="
+          if [ -d "target/release/bundle" ]; then
+            echo "Standard build:"
+            find target/release/bundle -type f
+          fi
+          if [ -d "target/universal-apple-darwin/release/bundle" ]; then
+            echo "Universal macOS build:"
+            find target/universal-apple-darwin/release/bundle -type f
+          fi
+          if [ ! -d "target/release/bundle" ] && [ ! -d "target/universal-apple-darwin/release/bundle" ]; then
+            echo "No bundle directory found!"
+          fi
+          
+          exit $BUILD_EXIT_CODE
 
       - name: Check build status
         if: steps.build.outputs.build_status != '0'
         run: exit 1
 
       - name: Upload Desktop artifacts
-        if: steps.build.outputs.build_status == '0'
+        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: kira-desktop-${{ matrix.platform }}
           path: |
-            target/release/bundle/deb/*.deb
-            target/release/bundle/rpm/*.rpm
-            target/release/bundle/appimage/*.AppImage
-            target/release/bundle/dmg/*.dmg
-            target/release/bundle/macos/*.app
-            target/release/bundle/msi/*.msi
-            target/release/bundle/nsis/*.exe
-          if-no-files-found: ignore
+            target/release/bundle/**/*
+            target/universal-apple-darwin/release/bundle/**/*
+          if-no-files-found: warn
 
       - name: Send Desktop Build Error to Telegram
         if: failure()
@@ -352,13 +364,24 @@ jobs:
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
         run: |
-          $ANDROID_HOME/build-tools/35.0.0/apksigner sign \
-            --ks app/release.keystore \
-            --ks-key-alias "$KEY_ALIAS" \
-            --ks-pass pass:"$KEYSTORE_PASSWORD" \
-            --key-pass pass:"$KEY_PASSWORD" \
-            --out app/build/outputs/apk/release/kira-release-signed.apk \
-            app/build/outputs/apk/release/app-release-unsigned.apk
+          # Check if APK is already signed by gradle
+          if [ -f "app/build/outputs/apk/release/app-release.apk" ]; then
+            echo "APK already signed by gradle, copying..."
+            cp app/build/outputs/apk/release/app-release.apk app/build/outputs/apk/release/kira-release-signed.apk
+          elif [ -f "app/build/outputs/apk/release/app-release-unsigned.apk" ]; then
+            echo "Signing unsigned APK..."
+            $ANDROID_HOME/build-tools/35.0.0/apksigner sign \
+              --ks app/release.keystore \
+              --ks-key-alias "$KEY_ALIAS" \
+              --ks-pass pass:"$KEYSTORE_PASSWORD" \
+              --key-pass pass:"$KEY_PASSWORD" \
+              --out app/build/outputs/apk/release/kira-release-signed.apk \
+              app/build/outputs/apk/release/app-release-unsigned.apk
+          else
+            echo "Error: No APK found to sign"
+            ls -la app/build/outputs/apk/release/
+            exit 1
+          fi
 
       - name: Upload Android artifacts
         uses: actions/upload-artifact@v4
@@ -500,6 +523,7 @@ jobs:
           fi
 
       - name: Send artifacts to Telegram
+        shell: bash
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
@@ -509,11 +533,23 @@ jobs:
           COMMIT_URL="${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }}"
           WORKFLOW_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
           
+          # List all downloaded artifacts for debugging
+          echo "=== Downloaded Artifacts ==="
+          find artifacts -type f
+          echo "==========================="
+          
           # Find all build artifacts
           WINDOWS_EXE=$(find artifacts -name "*.exe" -type f | head -1)
           MACOS_DMG=$(find artifacts -name "*.dmg" -type f | head -1)
           LINUX_DEB=$(find artifacts -name "*.deb" -type f | head -1)
           ANDROID_APK=$(find artifacts -name "*-signed.apk" -type f | head -1)
+          
+          # Debug: Show what was found
+          echo "Found artifacts:"
+          echo "Windows: $WINDOWS_EXE"
+          echo "macOS: $MACOS_DMG"
+          echo "Linux: $LINUX_DEB"
+          echo "Android: $ANDROID_APK"
           
           # Get file sizes
           WIN_SIZE=$([ -f "$WINDOWS_EXE" ] && du -h "$WINDOWS_EXE" | cut -f1 || echo "N/A")
@@ -540,6 +576,7 @@ jobs:
           
           # Send Android APK with main caption
           if [ -f "$ANDROID_APK" ]; then
+            echo "Uploading Android APK..."
             RESPONSE=$(curl -s -X POST "https://botapi.arasea.dpdns.org/bot$TELEGRAM_BOT_TOKEN/sendDocument" \
               -F chat_id="$TELEGRAM_CHAT_ID" \
               -F document=@"$ANDROID_APK" \
@@ -555,23 +592,40 @@ jobs:
                 -d message_id="$FILE_MESSAGE_ID" \
                 -d disable_notification="true"
             fi
+          else
+            echo "Warning: Android APK not found, skipping..."
           fi
           
           # Send other platform files
-          [ -f "$WINDOWS_EXE" ] && curl -s -X POST "https://botapi.arasea.dpdns.org/bot$TELEGRAM_BOT_TOKEN/sendDocument" \
-            -F chat_id="$TELEGRAM_CHAT_ID" \
-            -F document=@"$WINDOWS_EXE" \
-            -F caption="📦 Windows Installer"
+          if [ -f "$WINDOWS_EXE" ]; then
+            echo "Uploading Windows EXE..."
+            curl -s -X POST "https://botapi.arasea.dpdns.org/bot$TELEGRAM_BOT_TOKEN/sendDocument" \
+              -F chat_id="$TELEGRAM_CHAT_ID" \
+              -F document=@"$WINDOWS_EXE" \
+              -F caption="📦 Windows Installer"
+          else
+            echo "Warning: Windows EXE not found, skipping..."
+          fi
           
-          [ -f "$MACOS_DMG" ] && curl -s -X POST "https://botapi.arasea.dpdns.org/bot$TELEGRAM_BOT_TOKEN/sendDocument" \
-            -F chat_id="$TELEGRAM_CHAT_ID" \
-            -F document=@"$MACOS_DMG" \
-            -F caption="🍎 macOS DMG"
+          if [ -f "$MACOS_DMG" ]; then
+            echo "Uploading macOS DMG..."
+            curl -s -X POST "https://botapi.arasea.dpdns.org/bot$TELEGRAM_BOT_TOKEN/sendDocument" \
+              -F chat_id="$TELEGRAM_CHAT_ID" \
+              -F document=@"$MACOS_DMG" \
+              -F caption="🍎 macOS DMG"
+          else
+            echo "Warning: macOS DMG not found, skipping..."
+          fi
           
-          [ -f "$LINUX_DEB" ] && curl -s -X POST "https://botapi.arasea.dpdns.org/bot$TELEGRAM_BOT_TOKEN/sendDocument" \
-            -F chat_id="$TELEGRAM_CHAT_ID" \
-            -F document=@"$LINUX_DEB" \
-            -F caption="🐧 Linux DEB Package"
+          if [ -f "$LINUX_DEB" ]; then
+            echo "Uploading Linux DEB..."
+            curl -s -X POST "https://botapi.arasea.dpdns.org/bot$TELEGRAM_BOT_TOKEN/sendDocument" \
+              -F chat_id="$TELEGRAM_CHAT_ID" \
+              -F document=@"$LINUX_DEB" \
+              -F caption="🐧 Linux DEB Package"
+          else
+            echo "Warning: Linux DEB not found, skipping..."
+          fi
 
       - name: Send Build Summary on Failure
         if: failure()
