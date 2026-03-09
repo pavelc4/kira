@@ -1,4 +1,5 @@
 <script lang="ts">
+    import { page } from '$app/stores';
 </script>
 
 <nav class="flex w-24 flex-col items-center gap-6 py-8">
@@ -15,16 +16,27 @@
     </button>
     <a
         href="/"
-        class="group flex flex-col items-center gap-1.5 text-[11px] font-medium text-on-surface text-decoration-none"
+        class="group flex flex-col items-center gap-1.5 text-[11px] font-medium {$page.url.pathname === '/' ? 'text-on-surface' : 'text-on-surface-variant hover:text-on-surface'} text-decoration-none"
     >
         <div
-            class="flex h-9 w-16 items-center justify-center rounded-2xl bg-secondary-container text-on-secondary-container transition-colors"
+            class="flex h-9 w-16 items-center justify-center rounded-2xl {$page.url.pathname === '/' ? 'bg-secondary-container text-on-secondary-container' : 'transition-colors group-hover:bg-surface-variant'}"
         >
-            <span class="material-symbols-outlined text-[22px]" style="font-variation-settings: 'FILL' 1;"
+            <span class="material-symbols-outlined text-[22px]" style="font-variation-settings: {$page.url.pathname === '/' ? "'FILL' 1" : "'FILL' 0"};"
                 >devices</span
             >
         </div>
         <span>Devices</span>
+    </a>
+    <a
+        href="/process-manager"
+        class="group flex flex-col items-center gap-1.5 text-[11px] font-medium {$page.url.pathname === '/process-manager' ? 'text-on-surface' : 'text-on-surface-variant hover:text-on-surface'} text-decoration-none"
+    >
+        <div
+            class="flex h-9 w-16 items-center justify-center rounded-2xl {$page.url.pathname === '/process-manager' ? 'bg-secondary-container text-on-secondary-container' : 'transition-colors group-hover:bg-surface-variant'}"
+        >
+            <span class="material-symbols-outlined text-[22px]" style="font-variation-settings: {$page.url.pathname === '/process-manager' ? "'FILL' 1" : "'FILL' 0"};">memory</span>
+        </div>
+        <span>Process</span>
     </a>
     <a
         href="/"
